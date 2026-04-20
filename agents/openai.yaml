@@ -1,0 +1,7 @@
+interface:
+  display_name: "QR-coding-grounded-theory-skill"
+  short_description: "长篇访谈文本的扎根理论三级编码技能"
+  default_prompt: "Use $qr_coding_grounded_theory_skill to analyze a long interview transcript with grounded-theory coding and return the core theory plus the axial-code network."
+
+policy:
+  allow_implicit_invocation: true

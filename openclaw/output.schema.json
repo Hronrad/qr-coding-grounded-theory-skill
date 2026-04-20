@@ -1,0 +1,106 @@
+{
+  "type": "object",
+  "properties": {
+    "core_theory": {
+      "type": "string",
+      "description": "提炼出的核心范畴及完整的理论故事线叙述"
+    },
+    "axial_codes": {
+      "type": "string",
+      "description": "结构化的轴心类属网络（建议为序列化的JSON字符串）"
+    },
+    "artifacts_root_dir": {
+      "type": "string",
+      "description": "本次执行的中间产物根目录，需暴露并可供审计查看。"
+    },
+    "intermediate_artifacts": {
+      "type": "object",
+      "description": "按节点列出完整中间产物文件路径，确保切分、开放编码、轴心编码、备忘录和选择编码结果均被保留。",
+      "properties": {
+        "source_snapshot": {
+          "type": "string",
+          "description": "原始输入文本快照文件路径。"
+        },
+        "node_a_slices": {
+          "type": "string",
+          "description": "Node A 切分和标号后的完整文件路径。"
+        },
+        "node_b_open_codes": {
+          "type": "string",
+          "description": "Node B 开放编码后的完整文件路径。"
+        },
+        "node_c_axial_network": {
+          "type": "string",
+          "description": "Node C 轴心编码网络文件路径。"
+        },
+        "node_d_memos": {
+          "type": "string",
+          "description": "Node D 分析备忘录与聚合结果文件路径。"
+        },
+        "node_e_selective_coding": {
+          "type": "string",
+          "description": "Node E 选择编码和理论整合文件路径。"
+        }
+      },
+      "required": [
+        "source_snapshot",
+        "node_a_slices",
+        "node_b_open_codes",
+        "node_c_axial_network",
+        "node_d_memos",
+        "node_e_selective_coding"
+      ]
+    },
+    "coverage_report": {
+      "type": "object",
+      "description": "用于证明节点处理未丢失原文内容的覆盖率校验报告。",
+      "properties": {
+        "source_length": {
+          "type": "integer",
+          "description": "原始文本总长度。"
+        },
+        "node_a_coverage_status": {
+          "type": "string",
+          "description": "Node A 切分覆盖率状态，例如 pass 或 fail。"
+        },
+        "node_a_missing_spans": {
+          "type": "array",
+          "description": "Node A 未覆盖的原文区段列表，若无缺失则为空数组。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "node_b_coverage_status": {
+          "type": "string",
+          "description": "Node B 开放编码覆盖率状态，例如 pass 或 fail。"
+        },
+        "node_b_missing_segment_ids": {
+          "type": "array",
+          "description": "Node B 未保留的切片编号列表，若无缺失则为空数组。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verification_notes": {
+          "type": "string",
+          "description": "关于覆盖率验证过程的补充说明。"
+        }
+      },
+      "required": [
+        "source_length",
+        "node_a_coverage_status",
+        "node_a_missing_spans",
+        "node_b_coverage_status",
+        "node_b_missing_segment_ids",
+        "verification_notes"
+      ]
+    }
+  },
+  "required": [
+    "core_theory",
+    "axial_codes",
+    "artifacts_root_dir",
+    "intermediate_artifacts",
+    "coverage_report"
+  ]
+}

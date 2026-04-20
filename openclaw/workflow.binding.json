@@ -1,0 +1,103 @@
+{
+  "engine": "bind_existing_workflow",
+  "workflow": {
+    "workflow_id": "replace-with-your-existing-5-node-map-reduce-workflow-id",
+    "workflow_name": "grounded_theory_map_reduce_5_nodes",
+    "expected_node_count": 5,
+    "description": "用于长篇访谈文本扎根理论三级编码的 5 节点 Map-Reduce 工作流"
+  },
+  "runtime_contract": {
+    "persist_intermediate_artifacts": true,
+    "expose_artifacts_directory": true,
+    "fail_on_missing_source_coverage": true,
+    "require_lossless_traceability": true
+  },
+  "start_node": {
+    "node_id": "Node A",
+    "role": "切片节点"
+  },
+  "parameter_mapping": [
+    {
+      "skill_param": "interview_text",
+      "required": true,
+      "target_node": "Node A",
+      "target_field": "source_text",
+      "description": "将 Skill 输入的原始长文本映射为切片节点的源文本输入。"
+    },
+    {
+      "skill_param": "research_focus",
+      "required": false,
+      "target_node": "Node E",
+      "target_field": "prompt_vars.research_focus",
+      "description": "将 Skill 输入的研究焦点映射为选择编码节点的 Prompt 动态变量。"
+    }
+  ],
+  "node_roles": {
+    "Node A": "切片节点",
+    "Node B": "开放编码节点",
+    "Node C": "轴心编码节点",
+    "Node D": "备忘录与聚合节点",
+    "Node E": "选择编码节点"
+  },
+  "artifact_contract": {
+    "root_dir": "{{run.artifacts_root_dir}}",
+    "exposed_files": {
+      "source_snapshot": "source/original_interview.txt",
+      "node_a_slices": "node_a/slices_full.json",
+      "node_b_open_codes": "node_b/open_codes_full.json",
+      "node_c_axial_network": "node_c/axial_network.json",
+      "node_d_memos": "node_d/memo_aggregation.json",
+      "node_e_selective_coding": "node_e/selective_coding.json",
+      "coverage_report": "verification/coverage_report.json"
+    }
+  },
+  "node_completion_contracts": {
+    "Node A": {
+      "must_persist_artifact": "node_a/slices_full.json",
+      "must_include_fields": [
+        "segment_id",
+        "source_text",
+        "source_span_start",
+        "source_span_end"
+      ],
+      "verification": {
+        "type": "full_source_reconstruction",
+        "must_cover_entire_source": true,
+        "fail_on_missing_span": true
+      }
+    },
+    "Node B": {
+      "must_persist_artifact": "node_b/open_codes_full.json",
+      "must_include_fields": [
+        "segment_id",
+        "source_text",
+        "initial_codes"
+      ],
+      "verification": {
+        "type": "segment_to_code_coverage",
+        "must_include_all_segment_ids": true,
+        "fail_on_missing_segment": true
+      }
+    },
+    "Node C": {
+      "must_persist_artifact": "node_c/axial_network.json"
+    },
+    "Node D": {
+      "must_persist_artifact": "node_d/memo_aggregation.json"
+    },
+    "Node E": {
+      "must_persist_artifact": "node_e/selective_coding.json"
+    }
+  },
+  "output_binding": {
+    "source_node": "Node E",
+    "schema": "./output.schema.json",
+    "fields": [
+      "core_theory",
+      "axial_codes",
+      "artifacts_root_dir",
+      "intermediate_artifacts",
+      "coverage_report"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "interview_text": {
+      "type": "string",
+      "description": "必须提供的原始长文本数据（如访谈记录、观察笔记等）。"
+    },
+    "research_focus": {
+      "type": "string",
+      "description": "选填，研究的核心问题或关注焦点，用于引导最后一步选择编码的方向。"
+    }
+  },
+  "required": [
+    "interview_text"
+  ]
+}
