@@ -45,6 +45,24 @@ When the runtime supports workflow binding, pass `interview_text` to the slicing
 The workflow must also expose a browsable run artifact directory containing complete intermediate files for each node. At minimum, retain the original source snapshot, numbered slices, open-coding records, axial network draft, memo log, selective-coding synthesis, and machine-readable coverage reports.
 For hybrid slicing, also retain the deterministic atomic-unit file, the suggested batch file, and the Node A validation report.
 
+## Run Artifact Layout
+
+Write each execution to `runs/run-YYYY-MM-DD-NNN/` and keep the artifact layout aligned with the current project structure. A run directory should contain:
+
+- `source_snapshot.txt`
+- `final_output.json`
+- `framework_integration.json`
+- `node_a/atomic_units.json`
+- `node_a/batch_plan.json`
+- `node_a/slices.json`
+- `node_a/node_a_validation_report.json`
+- `node_b/open_codes.json`
+- `node_c/axial_network.json`
+- `node_d/memos.json`
+- `node_e/selective_coding.json`
+
+Assume future runs follow the same structure so they remain directly browsable by the included viewer.
+
 ## Output Rules
 
 - `core_theory` must contain both the core category and a complete theory storyline written as a coherent explanation.
@@ -58,3 +76,12 @@ For hybrid slicing, also retain the deterministic atomic-unit file, the suggeste
 
 - `scripts/prepare_hybrid_segments.py`: deterministic preprocessor for Node A. It converts raw text into ordered atomic units and suggested LLM batches while preserving exact source spans.
 - `scripts/validate_lossless_coverage.py`: strict verifier for Node A outputs. It checks exact reconstruction of the original text and enforces one-time usage of every atomic unit.
+
+## Viewer
+
+This skill bundle includes a local visualization page at `{baseDir}/viewer/index.html`.
+
+- Open the HTML file directly in a browser.
+- Use the page's folder picker to select either the `runs` directory or the whole skill directory.
+- The viewer will read the current run structure directly from local files without requiring a prebuilt index.
+- The viewer is intended to expose all five node outputs, the final output, the framework integration file, the atomic-unit list, and the progressive relations across open coding, axial coding, and selective coding.

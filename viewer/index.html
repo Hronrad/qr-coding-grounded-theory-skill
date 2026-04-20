@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grounded Theory Runs Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <p class="eyebrow">Runs Explorer</p>
+          <h1>扎根理论运行可视化</h1>
+          <p class="sidebar-copy">
+            浏览全部 run 目录、5 节点产物、三级编码递进关系与跨层跳转联系。
+          </p>
+        </div>
+
+        <section class="sidebar-panel">
+          <div class="panel-heading">
+            <h2>导入数据</h2>
+          </div>
+          <button id="pick-folder-button" class="primary-button">选择 runs 文件夹</button>
+          <input id="folder-input" class="hidden-input" type="file" webkitdirectory directory multiple />
+          <p id="import-status" class="sidebar-copy compact-copy">
+            直接打开本页后，选择 `runs` 文件夹，或选择整个 `qr-coding-grounded-theory-skill` 文件夹也可以。
+          </p>
+        </section>
+
+        <section class="sidebar-panel">
+          <div class="panel-heading">
+            <h2>运行列表</h2>
+            <span id="run-count" class="badge">0</span>
+          </div>
+          <div id="run-list" class="run-list"></div>
+        </section>
+
+        <section class="sidebar-panel">
+          <div class="panel-heading">
+            <h2>节点速览</h2>
+          </div>
+          <div id="node-summary" class="node-summary"></div>
+        </section>
+
+        <section class="sidebar-panel note-panel">
+          <div class="panel-heading">
+            <h2>使用方式</h2>
+          </div>
+          <p>
+            本页不依赖预生成索引。直接打开 HTML 后手动选择文件夹即可；后续新增 run 子目录时，重新选择一次文件夹即可刷新。
+          </p>
+        </section>
+      </aside>
+
+      <main class="main-content">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Audit-Friendly Workflow</p>
+            <h2 id="hero-title">加载中</h2>
+            <p id="hero-subtitle" class="hero-copy"></p>
+          </div>
+          <div id="hero-metrics" class="hero-metrics"></div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Encoding Ladder</p>
+              <h3>三级编码递进关系</h3>
+            </div>
+            <p class="section-copy">
+              点击任一片段、开放编码、轴心类属或理论维度，页面会同步高亮相关层级并更新下方解释面板。
+            </p>
+          </div>
+
+          <div class="hierarchy-grid">
+            <div class="hierarchy-column">
+              <div class="column-header">
+                <span class="layer-tag">Node A</span>
+                <h4>切分片段</h4>
+              </div>
+              <div id="segments-column" class="column-list"></div>
+            </div>
+
+            <div class="hierarchy-column">
+              <div class="column-header">
+                <span class="layer-tag">Node B</span>
+                <h4>开放编码</h4>
+              </div>
+              <div id="codes-column" class="column-list"></div>
+            </div>
+
+            <div class="hierarchy-column">
+              <div class="column-header">
+                <span class="layer-tag">Node C</span>
+                <h4>轴心类属</h4>
+              </div>
+              <div id="categories-column" class="column-list"></div>
+            </div>
+
+            <div class="hierarchy-column">
+              <div class="column-header">
+                <span class="layer-tag">Node E + Framework</span>
+                <h4>选择编码</h4>
+              </div>
+              <div id="selective-column" class="column-list"></div>
+            </div>
+          </div>
+
+          <div id="selection-panel" class="selection-panel"></div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Atomic Units</p>
+              <h3>原子单元列表</h3>
+            </div>
+            <p class="section-copy">
+              展示 Node A 程序预切分生成的全部原子单元。点击任一原子单元可定位到所属片段，并查看其原文内容与跨度。
+            </p>
+          </div>
+
+          <div class="atomic-layout">
+            <div id="atomic-list" class="atomic-list"></div>
+            <div class="atomic-preview">
+              <div id="atomic-title" class="artifact-title">请选择一个原子单元</div>
+              <div id="atomic-content" class="atomic-content"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Cross-Layer Links</p>
+              <h3>框架维度与跨层跳转</h3>
+            </div>
+            <p class="section-copy">
+              将选择编码结果、轴心类属、框架维度与关键备忘录放到同一界面中，便于追踪理论提升路径。
+            </p>
+          </div>
+
+          <div class="framework-layout">
+            <div class="framework-panel">
+              <h4>框架维度</h4>
+              <div id="framework-dimensions" class="dimension-list"></div>
+            </div>
+            <div class="framework-panel">
+              <h4>跨类属关系</h4>
+              <div id="relations-list" class="relation-list"></div>
+            </div>
+            <div class="framework-panel">
+              <h4>备忘录与竞争解释</h4>
+              <div id="memo-list" class="memo-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">All Artifacts</p>
+              <h3>run 目录全量产物浏览</h3>
+            </div>
+            <p class="section-copy">
+              此处展示当前 run 下的全部发现文件，支持直接预览 JSON 和文本，便于审计 5 节点与最终输出。
+            </p>
+          </div>
+
+          <div class="artifact-layout">
+            <div id="artifact-list" class="artifact-list"></div>
+            <div class="artifact-preview">
+              <div id="artifact-title" class="artifact-title">请选择一个文件</div>
+              <pre id="artifact-content" class="artifact-content"></pre>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
