@@ -12,6 +12,17 @@
     "fail_on_missing_source_coverage": true,
     "require_lossless_traceability": true
   },
+  "node_a_hybrid_segmentation": {
+    "mode": "program_plus_llm",
+    "preprocessor_script": "./scripts/prepare_hybrid_segments.py",
+    "validator_script": "./scripts/validate_lossless_coverage.py",
+    "preprocessor_outputs": [
+      "node_a/atomic_units.json",
+      "node_a/batch_plan.json"
+    ],
+    "llm_output": "node_a/slices_full.json",
+    "validator_output": "verification/node_a_validation_report.json"
+  },
   "start_node": {
     "node_id": "Node A",
     "role": "切片节点"
@@ -43,7 +54,10 @@
     "root_dir": "{{run.artifacts_root_dir}}",
     "exposed_files": {
       "source_snapshot": "source/original_interview.txt",
+      "node_a_atomic_units": "node_a/atomic_units.json",
+      "node_a_batch_plan": "node_a/batch_plan.json",
       "node_a_slices": "node_a/slices_full.json",
+      "node_a_validation_report": "verification/node_a_validation_report.json",
       "node_b_open_codes": "node_b/open_codes_full.json",
       "node_c_axial_network": "node_c/axial_network.json",
       "node_d_memos": "node_d/memo_aggregation.json",
@@ -56,20 +70,26 @@
       "must_persist_artifact": "node_a/slices_full.json",
       "must_include_fields": [
         "segment_id",
+        "atomic_unit_ids",
         "source_text",
         "source_span_start",
         "source_span_end"
       ],
       "verification": {
-        "type": "full_source_reconstruction",
+        "type": "hybrid_lossless_segmentation",
+        "requires_preprocessor": "./scripts/prepare_hybrid_segments.py",
+        "requires_validator": "./scripts/validate_lossless_coverage.py",
         "must_cover_entire_source": true,
-        "fail_on_missing_span": true
+        "must_use_every_atomic_unit_exactly_once": true,
+        "fail_on_missing_span": true,
+        "fail_on_duplicate_atomic_unit": true
       }
     },
     "Node B": {
       "must_persist_artifact": "node_b/open_codes_full.json",
       "must_include_fields": [
         "segment_id",
+        "atomic_unit_ids",
         "source_text",
         "initial_codes"
       ],

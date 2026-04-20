@@ -21,9 +21,21 @@
           "type": "string",
           "description": "原始输入文本快照文件路径。"
         },
+        "node_a_atomic_units": {
+          "type": "string",
+          "description": "Node A 程序预切分生成的原子单元文件路径。"
+        },
+        "node_a_batch_plan": {
+          "type": "string",
+          "description": "Node A 程序生成的建议批处理分组文件路径。"
+        },
         "node_a_slices": {
           "type": "string",
           "description": "Node A 切分和标号后的完整文件路径。"
+        },
+        "node_a_validation_report": {
+          "type": "string",
+          "description": "Node A 切分完成后的严格覆盖校验报告路径。"
         },
         "node_b_open_codes": {
           "type": "string",
@@ -44,7 +56,10 @@
       },
       "required": [
         "source_snapshot",
+        "node_a_atomic_units",
+        "node_a_batch_plan",
         "node_a_slices",
+        "node_a_validation_report",
         "node_b_open_codes",
         "node_c_axial_network",
         "node_d_memos",
@@ -70,6 +85,27 @@
             "type": "string"
           }
         },
+        "node_a_duplicate_unit_ids": {
+          "type": "array",
+          "description": "Node A 重复使用的原子单元编号列表，若无重复则为空数组。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "node_a_missing_unit_ids": {
+          "type": "array",
+          "description": "Node A 未使用的原子单元编号列表，若无缺失则为空数组。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "node_a_unknown_unit_ids": {
+          "type": "array",
+          "description": "Node A 使用了原子单元清单之外的编号列表，若无异常则为空数组。",
+          "items": {
+            "type": "string"
+          }
+        },
         "node_b_coverage_status": {
           "type": "string",
           "description": "Node B 开放编码覆盖率状态，例如 pass 或 fail。"
@@ -90,6 +126,9 @@
         "source_length",
         "node_a_coverage_status",
         "node_a_missing_spans",
+        "node_a_duplicate_unit_ids",
+        "node_a_missing_unit_ids",
+        "node_a_unknown_unit_ids",
         "node_b_coverage_status",
         "node_b_missing_segment_ids",
         "verification_notes"

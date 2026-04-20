@@ -11,6 +11,7 @@ metadata: {"openclaw":{"display_name":"QR-coding-grounded-theory-skill","manifes
 Use this skill when the user provides a long interview transcript, fieldnote, observation log, or other qualitative text and asks for deep qualitative analysis rather than a simple summary. The task is to build an interpretable grounded-theory result through open coding, axial coding, and selective coding.
 
 Read [references/grounded_theory_protocol.md]({baseDir}/references/grounded_theory_protocol.md) when you need the detailed coding rules, memoing heuristics, or output quality checklist.
+Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage.py` for the Node A hybrid slicing path when the workflow can invoke local scripts.
 
 ## Required Inputs
 
@@ -20,16 +21,17 @@ Read [references/grounded_theory_protocol.md]({baseDir}/references/grounded_theo
 ## Execution Workflow
 
 1. Treat the source as a long-form qualitative corpus rather than as a passage to summarize.
-2. Break the source into meaningful units before analysis. Preserve contradictions, tensions, and negative cases.
-3. Persist every node output as a full intermediate artifact set. The runtime must retain and expose the full sliced corpus, the full open-coding corpus, the full axial-coding aggregation, the memo log, and the final selective-coding package.
-4. After Node A completes, verify that the union of all numbered slices fully covers the original source text without omission. If any segment is missing, the workflow must fail rather than continue.
-5. Run open coding on every numbered slice. Each coded record must carry the original slice id, the original text span, and the generated initial codes so the mapping remains lossless and auditable.
-6. After Node B completes, verify that every slice produced by Node A appears exactly once in the open-coding output. If any slice is absent, duplicated unexpectedly, or truncated, the workflow must fail rather than continue.
-7. Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
-8. Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
-9. Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
-10. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code was merged, split, or elevated.
-11. Return the final result in the structure defined by `{baseDir}/openclaw/output.schema.json`, including artifact locations and coverage reports.
+2. Prepare deterministic atomic units before semantic slicing. Use `scripts/prepare_hybrid_segments.py` to produce ordered atomic units with exact source spans and suggested LLM work batches.
+3. Let Node A perform semantic slicing on top of those atomic units rather than on raw text directly. Node A must preserve every atomic unit id and may only regroup adjacent units without dropping or rewriting source text.
+4. Persist every node output as a full intermediate artifact set. The runtime must retain and expose the atomic units, the full sliced corpus, the full open-coding corpus, the full axial-coding aggregation, the memo log, and the final selective-coding package.
+5. After Node A completes, run `scripts/validate_lossless_coverage.py` to verify that the ordered Node A slices reconstruct the original source text and that every atomic unit is used exactly once. If any unit is missing, duplicated, or altered, the workflow must fail rather than continue.
+6. Run open coding on every numbered slice. Each coded record must carry the original slice id, the atomic unit ids, the original text span, and the generated initial codes so the mapping remains lossless and auditable.
+7. After Node B completes, verify that every slice produced by Node A appears exactly once in the open-coding output. If any slice is absent, duplicated unexpectedly, or truncated, the workflow must fail rather than continue.
+8. Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
+9. Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
+10. Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
+11. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code was merged, split, or elevated.
+12. Return the final result in the structure defined by `{baseDir}/openclaw/output.schema.json`, including artifact locations and coverage reports.
 
 ## OpenClaw Binding Contract
 
@@ -41,6 +43,7 @@ Read [references/grounded_theory_protocol.md]({baseDir}/references/grounded_theo
 When the runtime supports workflow binding, pass `interview_text` to the slicing source field on Node A and pass `research_focus` into the prompt variable for Node E.
 
 The workflow must also expose a browsable run artifact directory containing complete intermediate files for each node. At minimum, retain the original source snapshot, numbered slices, open-coding records, axial network draft, memo log, selective-coding synthesis, and machine-readable coverage reports.
+For hybrid slicing, also retain the deterministic atomic-unit file, the suggested batch file, and the Node A validation report.
 
 ## Output Rules
 
@@ -50,3 +53,8 @@ The workflow must also expose a browsable run artifact directory containing comp
 - `intermediate_artifacts` must enumerate the concrete artifact files produced by each node so the caller can inspect the full trail.
 - `coverage_report` must summarize the coverage checks for Node A and Node B and must explicitly report failure if any original text span was lost.
 - If the source text is too short, fragmented, or missing, say that grounded-theory coding cannot be completed reliably and explain the limitation.
+
+## Script Resources
+
+- `scripts/prepare_hybrid_segments.py`: deterministic preprocessor for Node A. It converts raw text into ordered atomic units and suggested LLM batches while preserving exact source spans.
+- `scripts/validate_lossless_coverage.py`: strict verifier for Node A outputs. It checks exact reconstruction of the original text and enforces one-time usage of every atomic unit.
