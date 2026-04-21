@@ -26,6 +26,21 @@ Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage
   - Under `grounded_theory`, a user-specified framework may be treated as a sensitizing concept at most, but it must not be imposed as the coding scaffold from the start.
   - Under `thematic_analysis`, a user-specified framework may be used as the organizing lens for coding, theme grouping, and final interpretation.
 
+## Method Semantics
+
+For this skill, the difference between `grounded_theory` and `thematic_analysis` is narrow and explicit.
+
+- Both methods should produce the same essential analytic architecture:
+  - source units or coded excerpts
+  - first-order codes
+  - higher-order grouped structures
+  - one final integrative framework or explanatory synthesis
+- The labels used for the middle layer may differ. In grounded theory this layer may be called `axial categories`; in thematic analysis it may be called `themes`, `subthemes`, or `theme groups`. Structurally, they occupy the same role: they are higher-order aggregations built from lower-level coding.
+- The decisive difference is whether an external framework may be imposed at the start:
+  - `grounded_theory`: no preloaded theory may be imposed as the organizing scaffold. The final framework must be derived through coding, comparison, grouping, and synthesis.
+  - `thematic_analysis`: a user-specified or externally supplied framework may be used from the start as the organizing scaffold for coding and grouping.
+- Therefore, the distinction is epistemic, not structural. Do not create two incompatible output ontologies just because the method name differs.
+
 ## Execution Workflow
 
 1. Treat the source as a long-form qualitative corpus rather than as a passage to summarize.
@@ -39,16 +54,16 @@ Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage
 7. Run slice-level coding on every numbered slice. Each coded record must carry the original slice id, the atomic unit ids, the original text span, and the generated code set so the mapping remains lossless and auditable.
 8. After Node B completes, verify that every slice produced by Node A appears exactly once in the coding output. If any slice is absent, duplicated unexpectedly, or truncated, the workflow must fail rather than continue.
 9. If `analysis_method = grounded_theory`:
-   - Run open coding first.
-   - Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
-   - Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
-   - Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
+  - Run open coding first.
+  - Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
+  - Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
+  - Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
 10. If `analysis_method = thematic_analysis`:
-   - Run initial coding first.
-   - Group codes into candidate themes and subthemes.
-   - Review and refine themes against the full corpus.
-   - Name and define themes clearly, then produce a thematic narrative.
-   - If the user provides a theoretical framework, that framework may be used as the organizing structure for themes, interpretation, and presentation.
+  - Run initial coding first.
+   - Group codes into higher-order thematic structures. These may be named `themes`, `subthemes`, `theme groups`, or similar, but they should occupy the same structural level that grounded theory would call axial aggregation.
+   - Review and refine those grouped structures against the full corpus.
+   - Name and define them clearly, then produce a final thematic narrative or integrative framework.
+   - If the user provides a theoretical framework, that framework may be used as the organizing structure for coding, grouping, interpretation, and final presentation.
 11. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code, category, or theme was merged, split, or elevated.
 12. Return the final result in the structure defined by `{baseDir}/openclaw/output.schema.json`, including artifact locations and coverage reports.
 
@@ -154,7 +169,7 @@ The local viewer at `{baseDir}/viewer/index.html` is defined against the canonic
 The final framework must be established through grounded-theory logic rather than imposed in advance.
 
 - Open coding must begin from the source material and preserve incident-level diversity. Do not start from a fixed theory template.
-- Axial coding must group and relate the emergent codes into higher-order categories, explicitly documenting conditions, phenomena, context, actions/interactions, and consequences.
+- Axial coding must group and relate the emergent codes into higher-order categories. Whether the middle layer is later displayed as categories, clusters, or grouped analytic structures, it must emerge from coding rather than from a preloaded theory template.
 - Selective coding must identify one core category or core mechanism that integrates the axial categories into a single explanatory storyline.
 - A named framework such as `L-I-V` may be used in the final integration only if the workflow explicitly demonstrates how that framework was grounded in the accumulated axial categories and memos.
 - If a sensitizing concept or predefined lens is used, the run must distinguish:
@@ -171,8 +186,9 @@ Thematic analysis is a separate analytic mode and must not be mislabeled as grou
 - Themes may be constructed deductively, inductively, or through a hybrid approach, but the run must state which strategy was used.
 - The final thematic structure should distinguish:
   - coding units or coded excerpts
-  - candidate themes and subthemes
-  - the interpretive framework used for organizing those themes
+  - grouped analytic structures at the middle layer, whether they are named `themes`, `subthemes`, `theme groups`, or similar
+  - the final interpretive framework used for organizing those grouped structures
+- The middle layer in thematic analysis is structurally equivalent to the middle aggregation layer in grounded theory. Only the epistemic rule differs: thematic analysis may begin under a predefined framework, whereas grounded theory may not.
 - If a user-specified framework is used, the output must say so explicitly rather than presenting the framework as though it emerged entirely from the data.
 - Thematic analysis outputs should still preserve provenance, negative or disconfirming material, and enough intermediate artifacts for auditability.
 
@@ -185,7 +201,8 @@ Thematic analysis is a separate analytic mode and must not be mislabeled as grou
 - `coverage_report` must summarize the coverage checks for Node A and Node B and must explicitly report failure if any original text span was lost.
 - The output must explicitly state which method was used: `grounded_theory` or `thematic_analysis`.
 - If `grounded_theory` is used, the final framework must be described as having been built through open coding, axial coding, and selective coding rather than as a preloaded template.
-- If `thematic_analysis` is used and the user has specified a framework, the output may organize themes with that framework, but it must clearly mark the framework as user-specified or externally supplied.
+- If `thematic_analysis` is used and the user has specified a framework, the output may organize the same middle-layer grouped structures with that framework, but it must clearly mark the framework as user-specified or externally supplied.
+- Do not imply that `axial coding` versus `theme grouping` creates a fundamentally different output structure. The final analytic shape should remain consistent across methods; the permitted source of the organizing framework is what changes.
 - If the source text is too short, fragmented, or missing, say that grounded-theory coding cannot be completed reliably and explain the limitation.
 
 ## Script Resources
