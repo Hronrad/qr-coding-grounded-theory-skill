@@ -33,6 +33,37 @@ Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage
 11. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code was merged, split, or elevated.
 12. Return the final result in the structure defined by `{baseDir}/openclaw/output.schema.json`, including artifact locations and coverage reports.
 
+## Source Provenance Contract
+
+All multi-file runs must use a normalized, stable source-identity contract. This is required because viewer-side heuristic matching from short bracket tags such as `历史-转段` or `匡院-物理` is not reliable enough to distinguish multiple files from the same discipline, year, or status.
+
+- Every source file in `source/` must receive a stable `source_file_id` such as `src-001`, `src-002`, and so on.
+- Every source file must also retain a human-readable `source_file_label` derived from the interview or open-coding filename.
+- `source_file_id` is the canonical identifier used by Node B, Node C, Node D, Node E, the viewer, and any downstream audit tooling. Human-readable short tags may be shown to users, but they must never be the only provenance key.
+- If two files belong to the same discipline, year, or status, they must still remain distinct by `source_file_id`. The workflow must not collapse them under a shared shorthand such as `历史-转段` or `物理-匡院`.
+- Provenance must remain lossless from Node B onward. Any evidence item elevated into axial coding or selective coding must still point back to exactly one `source_file_id`.
+- If a quote, open code, memo, or representative case cannot be traced back to one specific `source_file_id`, it must be marked as provenance-incomplete and must not silently inherit the nearest-matching file.
+
+The canonical structured evidence object is:
+
+```json
+{
+  "evidence_id": "ev-000001",
+  "source_file_id": "src-001",
+  "source_file_label": "大四-历史-转段",
+  "open_code_file": "大四-历史-转段_开放编码.md",
+  "raw_source_path": "source/大四 历史（转段）.docx",
+  "quote_excerpt": "有peer pressure，会羡慕那些有灵气、有天分的同学",
+  "citation_tag": "历史-转段-I-096",
+  "grounded_code_ref": "I2a",
+  "discipline": "历史",
+  "year": "大四",
+  "status": "转段"
+}
+```
+
+When backward compatibility requires a string field such as `source_codes`, that string may remain as a display field, but it must be generated from the structured evidence objects above rather than serving as the primary source-tracing mechanism.
+
 ## OpenClaw Binding Contract
 
 - Manifest: `{baseDir}/openclaw/manifest.json`
@@ -42,12 +73,38 @@ Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage
 
 When the runtime supports workflow binding, pass `interview_text` to the slicing source field on Node A and pass `research_focus` into the prompt variable for Node E.
 
-The workflow must also expose a browsable run artifact directory containing complete intermediate files for each node. At minimum, retain the original source snapshot, numbered slices, open-coding records, axial network draft, memo log, selective-coding synthesis, and machine-readable coverage reports.
+The workflow must also expose a browsable run artifact directory containing complete intermediate files for each node. At minimum, retain the source manifest, open-coding inventory, axial network draft, memo log, selective-coding synthesis, and machine-readable reports.
 For hybrid slicing, also retain the deterministic atomic-unit file, the suggested batch file, and the Node A validation report.
 
-## Run Artifact Layout
+## Canonical Run Layout
 
-Write each execution to `runs/run-YYYY-MM-DD-NNN/` and keep the artifact layout aligned with the current project structure. A run directory should contain:
+Write each execution to `runs/run-YYYY-MM-DD-NNN/` and keep the artifact layout aligned with the current native viewer structure. The canonical run directory is:
+
+```text
+runs/run-YYYY-MM-DD-NNN/
+├── FINAL_REPORT.md
+├── PROGRESS_REPORT.md
+├── node_b/
+│   └── open_codes_full.json
+├── node_c_axial_network.json
+├── node_d/
+│   └── memo_aggregation.json
+├── node_e_selective_coding.json
+├── source/
+│   ├── *.docx
+│   └── 可选的源文本汇总或清单文件
+└── verification/
+    └── 可选的校验报告
+```
+
+In addition, the following files are strongly recommended because they make auditing and visualization stable:
+
+- `source/source_manifest.json`: the canonical source registry for the run. It should enumerate every `source_file_id`, label, original path, open-coding path, discipline, year, and status.
+- `node_c_axial_network.json`: the canonical axial-coding object used by the viewer. It must preserve structured evidence references for every subcategory.
+- `node_e_selective_coding.json`: the canonical selective-coding object used by the viewer. It must preserve integrated model, phases, loops, pathways, and theoretical storyline.
+- `node_d/memo_aggregation.json`: the canonical memo aggregation file used by the viewer.
+
+If compatibility exports are needed for older tooling, they must be written as secondary artifacts only. Examples include:
 
 - `source_snapshot.txt`
 - `final_output.json`
@@ -61,7 +118,31 @@ Write each execution to `runs/run-YYYY-MM-DD-NNN/` and keep the artifact layout 
 - `node_d/memos.json`
 - `node_e/selective_coding.json`
 
-Assume future runs follow the same structure so they remain directly browsable by the included viewer.
+These compatibility files must never be treated as the canonical source for viewer rendering when the native files listed above are available.
+
+## Native Viewer Requirements
+
+The local viewer at `{baseDir}/viewer/index.html` is defined against the canonical native run layout above.
+
+- The viewer must prioritize `node_c_axial_network.json`, `node_e_selective_coding.json`, `node_b/open_codes_full.json`, `PROGRESS_REPORT.md`, `FINAL_REPORT.md`, and the `source/` directory.
+- The viewer must treat each source file as an independent case object. It must not reconstruct source cases by reading compatibility-layer slices or synthetic snapshots.
+- The viewer must show explicit provenance status. If a source file has no structured evidence references in Node C or Node E, the UI should say that provenance was not retained upstream rather than simply showing `无`.
+- The viewer must not silently guess source ownership when multiple files share the same discipline or status labels. If structured provenance is missing, it should prefer a visible warning over a misleading auto-match.
+- The viewer may still expose compatibility artifacts in the raw file browser, but they are not the primary analytic layer.
+
+## Grounded Theory Framework Rules
+
+The final framework must be established through grounded-theory logic rather than imposed in advance.
+
+- Open coding must begin from the source material and preserve incident-level diversity. Do not start from a fixed theory template.
+- Axial coding must group and relate the emergent codes into higher-order categories, explicitly documenting conditions, phenomena, context, actions/interactions, and consequences.
+- Selective coding must identify one core category or core mechanism that integrates the axial categories into a single explanatory storyline.
+- A named framework such as `L-I-V` may be used in the final integration only if the workflow explicitly demonstrates how that framework was grounded in the accumulated axial categories and memos.
+- If a sensitizing concept or predefined lens is used, the run must distinguish:
+  - data-grounded categories that emerged from coding
+  - final integrative dimensions or framework labels used for theoretical synthesis
+- The final framework must preserve rival explanations, boundary conditions, and partial or failed pathways. It must not flatten contradictory cases into one success narrative.
+- Representative cases, feedback loops, and policy/practice implications must all remain traceable to grounded categories and ultimately to source-level provenance.
 
 ## Output Rules
 
@@ -84,4 +165,5 @@ This skill bundle includes a local visualization page at `{baseDir}/viewer/index
 - Open the HTML file directly in a browser.
 - Use the page's folder picker to select either the `runs` directory or the whole skill directory.
 - The viewer will read the current run structure directly from local files without requiring a prebuilt index.
-- The viewer is intended to expose all five node outputs, the final output, the framework integration file, the atomic-unit list, and the progressive relations across open coding, axial coding, and selective coding.
+- The viewer is intended to expose the native source cases, evidence excerpts, subcategories, axial categories, selective-coding objects, and the progressive relations across open coding, axial coding, and selective coding.
+- The viewer should be assumed to work against the canonical native run layout, with compatibility-layer files treated as secondary exports only.

@@ -1,19 +1,18 @@
 const KNOWN_FILE_CANDIDATES = {
-  source_snapshot: ["source_snapshot.txt", "source/original_interview.txt"],
-  final_output: ["final_output.json"],
-  framework_integration: ["framework_integration.json"],
-  node_a_atomic_units: ["node_a/atomic_units.json"],
-  node_a_batch_plan: ["node_a/batch_plan.json"],
-  node_a_slices: ["node_a/slices.json", "node_a/slices_full.json"],
-  node_a_validation_report: [
-    "node_a/node_a_validation_report.json",
-    "verification/node_a_validation_report.json",
-    "verification/coverage_report.json",
-  ],
-  node_b_open_codes: ["node_b/open_codes.json", "node_b/open_codes_full.json"],
-  node_c_axial_network: ["node_c/axial_network.json"],
-  node_d_memos: ["node_d/memos.json", "node_d/memo_aggregation.json"],
-  node_e_selective_coding: ["node_e/selective_coding.json"],
+  progress_report: ["PROGRESS_REPORT.md"],
+  final_report: ["FINAL_REPORT.md"],
+  open_codes_summary: ["node_b/open_codes_full.json"],
+  axial_network_native: ["node_c_axial_network.json"],
+  selective_native: ["node_e_selective_coding.json"],
+  memo_aggregation: ["node_d/memo_aggregation.json"],
+};
+
+const THEORY_ORDER = ["core", "L", "I", "V", "C"];
+const DIMENSION_META = {
+  L: { label: "L", name: "知识逻辑转化" },
+  I: { label: "I", name: "身份认同转化" },
+  V: { label: "V", name: "价值观念转化" },
+  C: { label: "C", name: "情境条件" },
 };
 
 const state = {
@@ -22,7 +21,6 @@ const state = {
   currentData: null,
   selection: { type: "core", id: "core" },
   activeArtifactLabel: null,
-  activeAtomicUnitId: null,
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -46,7 +44,6 @@ function init() {
       state.currentRun = null;
       state.currentData = null;
       state.activeArtifactLabel = null;
-      state.activeAtomicUnitId = null;
       state.selection = { type: "core", id: "core" };
 
       document.getElementById("run-count").textContent = manifest.run_count;
@@ -55,7 +52,10 @@ function init() {
       renderRunList();
 
       if (manifest.runs.length) {
-        await loadRun(manifest.runs[0].id);
+        const preferredRun =
+          manifest.runs.find((run) => run.files.axial_network_native && run.files.selective_native) ||
+          manifest.runs[0];
+        await loadRun(preferredRun.id);
       } else {
         showEmptyState("未识别到任何 run 子目录", "请重新选择 `runs` 文件夹或整个 skill 文件夹。");
       }
@@ -67,26 +67,28 @@ function init() {
 
   showEmptyState("等待导入 runs 文件夹", "直接打开本页后，点击左侧按钮选择本地文件夹即可开始浏览。");
   renderRunList();
-  renderNodeSummary();
+  renderSidebarSummary();
 }
 
 function showEmptyState(title, subtitle) {
   document.getElementById("hero-title").textContent = title;
   document.getElementById("hero-subtitle").textContent = subtitle;
   document.getElementById("hero-metrics").innerHTML = "";
-  document.getElementById("segments-column").innerHTML = "";
-  document.getElementById("codes-column").innerHTML = "";
-  document.getElementById("categories-column").innerHTML = "";
-  document.getElementById("selective-column").innerHTML = "";
+  document.getElementById("source-list").innerHTML = "";
+  document.getElementById("source-detail-title").textContent = "请选择一个来源文件";
+  document.getElementById("source-detail-content").innerHTML = "";
+  document.getElementById("sources-column").innerHTML = "";
+  document.getElementById("evidence-column").innerHTML = "";
+  document.getElementById("subcategory-column").innerHTML = "";
+  document.getElementById("category-column").innerHTML = "";
+  document.getElementById("theory-column").innerHTML = "";
   document.getElementById("selection-panel").innerHTML = "";
   document.getElementById("framework-dimensions").innerHTML = "";
-  document.getElementById("relations-list").innerHTML = "";
-  document.getElementById("memo-list").innerHTML = "";
-  document.getElementById("atomic-list").innerHTML = "";
-  document.getElementById("atomic-title").textContent = "请选择一个原子单元";
-  document.getElementById("atomic-content").textContent = "";
+  document.getElementById("phase-list").innerHTML = "";
+  document.getElementById("loop-list").innerHTML = "";
+  document.getElementById("pathway-list").innerHTML = "";
   document.getElementById("artifact-list").innerHTML = "";
-  document.getElementById("artifact-title").textContent = "请选择一个文件夹";
+  document.getElementById("artifact-title").textContent = "请选择一个文件";
   document.getElementById("artifact-content").textContent = "";
 }
 
@@ -98,10 +100,10 @@ function buildManifestFromFiles(files) {
     const normalized = relativePath.replaceAll("\\", "/");
     const parts = normalized.split("/").filter(Boolean);
 
-    let runIndex = parts.indexOf("runs");
-    if (runIndex >= 0 && parts[runIndex + 1]) {
-      const runId = parts[runIndex + 1];
-      const artifactPath = parts.slice(runIndex + 2).join("/");
+    const runsIndex = parts.indexOf("runs");
+    if (runsIndex >= 0 && parts[runsIndex + 1]) {
+      const runId = parts[runsIndex + 1];
+      const artifactPath = parts.slice(runsIndex + 2).join("/");
       pushRunFile(runBuckets, runId, artifactPath, file);
       return;
     }
@@ -114,7 +116,7 @@ function buildManifestFromFiles(files) {
     }
   });
 
-  const runs = Array.from(runBuckets.values()).sort((a, b) => a.id.localeCompare(b.id));
+  const runs = Array.from(runBuckets.values()).sort((a, b) => b.id.localeCompare(a.id));
   runs.forEach((run) => {
     run.artifacts.sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
     run.files = selectKnownFiles(run.artifacts);
@@ -176,7 +178,9 @@ function selectKnownFiles(artifacts) {
 
 async function loadRun(runId) {
   const run = state.manifest?.runs.find((entry) => entry.id === runId);
-  if (!run) return;
+  if (!run) {
+    return;
+  }
 
   state.currentRun = run;
   state.selection = { type: "core", id: "core" };
@@ -184,138 +188,187 @@ async function loadRun(runId) {
 
   const data = await loadRunArtifacts(run);
   state.currentData = data;
-  state.activeArtifactLabel = run.files.final_output
-    ? findArtifactLabel(run, run.files.final_output)
+  state.activeArtifactLabel = run.files.final_report
+    ? findArtifactLabel(run, run.files.final_report)
     : run.artifacts?.[0]?.label || null;
-  state.activeAtomicUnitId = data.atomicUnits[0]?.unit_id || null;
 
   renderHero();
-  renderNodeSummary();
-  renderHierarchy();
+  renderSidebarSummary();
+  renderSourceAtlas();
+  renderCodingLadder();
   renderSelectionPanel();
-  renderAtomicUnits();
-  renderFrameworkPanels();
+  renderTheoryPanels();
   renderArtifactBrowser();
 }
 
 async function loadRunArtifacts(run) {
-  const fileEntries = await Promise.all(
+  const knownEntries = await Promise.all(
     Object.entries(run.files || {}).map(async ([key, file]) => [key, await readArtifact(file)])
   );
+  const fileData = Object.fromEntries(knownEntries);
 
-  const fileData = Object.fromEntries(fileEntries);
-  const sourceText = typeof fileData.source_snapshot === "string" ? fileData.source_snapshot : "";
-  const nodeA = fileData.node_a_slices?.slices || [];
-  const atomicUnits = fileData.node_a_atomic_units?.atomic_units || [];
-  const openLedger = fileData.node_b_open_codes?.open_coding_ledger || [];
-  const fallbackAxial = parseAxialCodes(fileData.final_output?.axial_codes);
-  const axialCategories = fileData.node_c_axial_network?.axial_categories || fallbackAxial.categories || {};
-  const relations =
-    fileData.node_c_axial_network?.cross_category_relations || fallbackAxial.cross_category_relations || [];
-  const memos = fileData.node_d_memos?.memo_log || [];
-  const rivalExplanations = fileData.node_d_memos?.rival_explanations || [];
-  const tensions = fileData.node_d_memos?.key_tensions || [];
-  const selective = fileData.node_e_selective_coding || {};
-  const finalOutput = fileData.final_output || {};
-  const framework = fileData.framework_integration || {};
-  const coverage = finalOutput.coverage_report || fileData.node_a_validation_report || {};
+  const progressReport = typeof fileData.progress_report === "string" ? fileData.progress_report : "";
+  const finalReport = typeof fileData.final_report === "string" ? fileData.final_report : "";
+  const openSummary = isRecord(fileData.open_codes_summary) ? fileData.open_codes_summary : {};
+  const axial = isRecord(fileData.axial_network_native) ? fileData.axial_network_native : {};
+  const selective = isRecord(fileData.selective_native) ? fileData.selective_native : {};
 
-  const segmentMap = new Map(nodeA.map((segment) => [segment.segment_id, segment]));
-  const codeMap = new Map();
-  const segmentToCodes = new Map();
+  const progressIndex = parseProgressReport(progressReport);
+  const sourceDocArtifacts = (run.artifacts || []).filter(
+    (artifact) => artifact.label.startsWith("source/") && /\.(docx|txt)$/i.test(artifact.label)
+  );
 
-  openLedger.forEach((entry) => {
-    segmentToCodes.set(entry.segment_id, entry.initial_codes || []);
-    (entry.initial_codes || []).forEach((code) => {
-      if (!codeMap.has(code)) {
-        codeMap.set(code, {
-          code,
-          segmentIds: new Set(),
-          labels: new Set(),
-          count: 0,
-        });
-      }
-      const bucket = codeMap.get(code);
-      bucket.segmentIds.add(entry.segment_id);
-      bucket.labels.add(entry.label);
-      bucket.count += 1;
+  const sources = buildSourceEntries(openSummary, sourceDocArtifacts, progressIndex);
+  const sourceMap = new Map(sources.map((source) => [source.id, source]));
+
+  const evidenceItems = [];
+  const evidenceMap = new Map();
+  const subcategoryEntries = [];
+  const subcategoryMap = new Map();
+  const categoryEntries = [];
+  const categoryMap = new Map();
+  const relations = Array.isArray(axial.category_relationships) ? axial.category_relationships : [];
+
+  (axial.axial_categories || []).forEach((category) => {
+    const dimensionId = normalizeDimensionId(category.dimension);
+    const categoryEntry = {
+      id: category.id,
+      name: category.name || category.id,
+      dimensionId,
+      description: category.description || "",
+      subcategoryIds: [],
+      evidenceIds: [],
+      sourceIds: [],
+      relations: relations.filter((relation) => relation.source === category.id || relation.target === category.id),
+    };
+
+    const categorySourceIds = new Set();
+
+    (category.sub_categories || []).forEach((subCategory, subIndex) => {
+      const subId = subCategory.id || `${category.id}-sub-${subIndex + 1}`;
+      const subEntry = {
+        id: subId,
+        name: subCategory.name || subId,
+        categoryId: category.id,
+        dimensionId,
+        phenomenon: subCategory.paradigm?.phenomenon || "",
+        paradigm: subCategory.paradigm || {},
+        evidenceIds: [],
+        sourceIds: [],
+      };
+
+      const subSourceIds = new Set();
+
+      (subCategory.source_codes || []).forEach((rawEvidence, evidenceIndex) => {
+        const parsed = parseEvidence(rawEvidence);
+        const sourceId = matchSourceId(parsed.citation || rawEvidence, sources);
+        const evidenceId = `${subId}::${String(evidenceIndex + 1).padStart(3, "0")}`;
+        const evidence = {
+          id: evidenceId,
+          raw: rawEvidence,
+          excerpt: parsed.excerpt,
+          citation: parsed.citation,
+          sourceId,
+          subcategoryId: subId,
+          categoryId: category.id,
+          dimensionId,
+        };
+
+        evidenceItems.push(evidence);
+        evidenceMap.set(evidenceId, evidence);
+        subEntry.evidenceIds.push(evidenceId);
+        categoryEntry.evidenceIds.push(evidenceId);
+
+        if (sourceId && sourceMap.has(sourceId)) {
+          subSourceIds.add(sourceId);
+          categorySourceIds.add(sourceId);
+          const source = sourceMap.get(sourceId);
+          source.evidenceIds.add(evidenceId);
+          source.subcategoryIds.add(subId);
+          source.categoryIds.add(category.id);
+          source.dimensionIds.add(dimensionId);
+        }
+      });
+
+      subEntry.sourceIds = Array.from(subSourceIds).sort(compareNatural);
+      subcategoryEntries.push(subEntry);
+      subcategoryMap.set(subId, subEntry);
+      categoryEntry.subcategoryIds.push(subId);
     });
+
+    categoryEntry.sourceIds = Array.from(categorySourceIds).sort(compareNatural);
+    categoryEntries.push(categoryEntry);
+    categoryMap.set(category.id, categoryEntry);
   });
 
-  const categoryEntries = Object.entries(axialCategories).map(([id, value]) => ({
-    id,
-    ...value,
-  }));
-  const codeToCategories = new Map();
-  const segmentToCategories = new Map();
+  const dimensions = buildDimensionEntries(selective, axial, categoryEntries, sourceMap, subcategoryMap, evidenceMap);
+  const dimensionMap = new Map(dimensions.map((dimension) => [dimension.id, dimension]));
 
-  categoryEntries.forEach((category) => {
-    (category.codes || []).forEach((code) => {
-      if (!codeToCategories.has(code)) {
-        codeToCategories.set(code, new Set());
-      }
-      codeToCategories.get(code).add(category.id);
-    });
-    (category.segment_ids || []).forEach((segmentId) => {
-      if (!segmentToCategories.has(segmentId)) {
-        segmentToCategories.set(segmentId, new Set());
-      }
-      segmentToCategories.get(segmentId).add(category.id);
-    });
+  const phases = buildPhaseEntries(selective);
+  const phaseMap = new Map(phases.map((phase) => [phase.id, phase]));
+
+  const loops = buildLoopEntries(selective, categoryMap);
+  const loopMap = new Map(loops.map((loop) => [loop.id, loop]));
+
+  const pathways = buildPathwayEntries(selective, sources);
+  const pathwayMap = new Map(pathways.map((pathway) => [pathway.id, pathway]));
+
+  const core = buildCoreEntry(selective, dimensions, phases, loops, pathways);
+
+  sources.forEach((source) => {
+    source.evidenceIds = Array.from(source.evidenceIds).sort(compareNatural);
+    source.subcategoryIds = Array.from(source.subcategoryIds).sort(compareNatural);
+    source.categoryIds = Array.from(source.categoryIds).sort(compareNatural);
+    source.dimensionIds = Array.from(source.dimensionIds).sort(orderDimensionIds);
+    source.pathwayIds = Array.from(source.pathwayIds).sort(compareNatural);
   });
 
-  const categoryToDimensions = new Map();
-  const dimensionToCategories = new Map();
-  const atomicUnitMap = new Map(atomicUnits.map((unit) => [unit.unit_id, unit]));
-  const atomicUnitToSegment = new Map();
-  Object.entries(framework.axial_categories_mapping || {}).forEach(([categoryId, dimensionIds]) => {
-    categoryToDimensions.set(categoryId, new Set(dimensionIds));
-    dimensionIds.forEach((dimensionId) => {
-      if (!dimensionToCategories.has(dimensionId)) {
-        dimensionToCategories.set(dimensionId, new Set());
-      }
-      dimensionToCategories.get(dimensionId).add(categoryId);
-    });
+  evidenceItems.sort((a, b) => {
+    const sourceA = a.sourceId ? sourceMap.get(a.sourceId)?.sequence ?? 999 : 999;
+    const sourceB = b.sourceId ? sourceMap.get(b.sourceId)?.sequence ?? 999 : 999;
+    if (sourceA !== sourceB) {
+      return sourceA - sourceB;
+    }
+    return a.id.localeCompare(b.id, "zh-Hans-CN");
   });
 
-  nodeA.forEach((segment) => {
-    (segment.atomic_unit_ids || []).forEach((unitId) => {
-      atomicUnitToSegment.set(unitId, segment.segment_id);
-    });
+  subcategoryEntries.sort((a, b) => a.id.localeCompare(b.id, "zh-Hans-CN"));
+  categoryEntries.sort((a, b) => a.id.localeCompare(b.id, "zh-Hans-CN"));
+  sources.sort((a, b) => {
+    if (a.sequence !== b.sequence) {
+      return a.sequence - b.sequence;
+    }
+    return a.label.localeCompare(b.label, "zh-Hans-CN");
   });
 
   return {
     run,
     files: run.files,
-    sourceText,
-    nodeA,
-    atomicUnits,
-    openLedger,
-    codeItems: Array.from(codeMap.values())
-      .map((item) => ({
-        code: item.code,
-        segmentIds: Array.from(item.segmentIds),
-        labels: Array.from(item.labels),
-        count: item.count,
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code, "zh-Hans-CN")),
-    categoryEntries,
-    relations,
-    memos,
-    rivalExplanations,
-    tensions,
+    artifacts: run.artifacts,
+    progressReport,
+    finalReport,
+    openSummary,
+    axial,
     selective,
-    finalOutput,
-    framework,
-    coverage,
-    segmentMap,
-    segmentToCodes,
-    codeToCategories,
-    segmentToCategories,
-    categoryToDimensions,
-    dimensionToCategories,
-    atomicUnitMap,
-    atomicUnitToSegment,
+    progressIndex,
+    sources,
+    sourceMap,
+    evidenceItems,
+    evidenceMap,
+    subcategoryEntries,
+    subcategoryMap,
+    categoryEntries,
+    categoryMap,
+    dimensions,
+    dimensionMap,
+    phases,
+    phaseMap,
+    loops,
+    loopMap,
+    pathways,
+    pathwayMap,
+    core,
+    relations,
   };
 }
 
@@ -337,58 +390,54 @@ function renderRunList() {
 
 function renderHero() {
   const data = state.currentData;
-  const title = document.getElementById("hero-title");
-  const subtitle = document.getElementById("hero-subtitle");
-  const metrics = document.getElementById("hero-metrics");
+  document.getElementById("hero-title").textContent =
+    data.selective.metadata?.research_topic || data.axial.metadata?.research_topic || data.run.label;
+  document.getElementById("hero-subtitle").textContent =
+    data.selective.integrated_model?.description ||
+    data.selective.theoretical_storyline?.summary ||
+    "当前 run 已加载，可浏览来源案例、证据摘录、轴心范畴与理论层对象。";
 
-  title.textContent = data.run.label;
-  subtitle.textContent =
-    data.selective.core_category_brief ||
-    data.finalOutput.core_theory?.slice(0, 180) ||
-    "当前 run 已加载，可浏览全部节点产物与编码关系。";
-
-  const metricItems = [
-    ["Node A 片段", data.nodeA.length],
-    ["Node B 开放码", data.codeItems.length],
-    ["Node C 轴心类属", data.categoryEntries.length],
-    ["Node D 备忘录", data.memos.length],
-    ["覆盖状态", data.coverage.node_a_coverage_status || "unknown"],
-    ["框架维度", Object.keys(data.framework.framework_dimensions || {}).length],
+  const metrics = [
+    ["来源文件", data.sources.length],
+    ["证据摘录", data.evidenceItems.length],
+    ["子类属", data.subcategoryEntries.length],
+    ["轴心范畴", data.categoryEntries.length],
+    ["理论阶段", data.phases.length],
+    ["替代路径", data.pathways.length],
   ];
 
-  metrics.innerHTML = metricItems
+  document.getElementById("hero-metrics").innerHTML = metrics
     .map(
       ([label, value]) => `
         <div class="metric-card">
           <span class="metric-label">${escapeHtml(label)}</span>
-          <span class="metric-value ${
-            value === "pass" ? "status-pass" : ""
-          }">${escapeHtml(String(value))}</span>
+          <span class="metric-value">${escapeHtml(String(value))}</span>
         </div>
       `
     )
     .join("");
 }
 
-function renderNodeSummary() {
-  const data = state.currentData;
+function renderSidebarSummary() {
   const root = document.getElementById("node-summary");
+  const data = state.currentData;
   if (!data) {
     root.innerHTML = `
       <div class="node-card">
         <strong>等待导入</strong>
-        <small>选择本地文件夹后显示节点统计</small>
+        <small>加载新版 run 后显示原生对象统计</small>
       </div>
     `;
     return;
   }
+
   const summaryItems = [
-    ["Node A", `${data.nodeA.length} 段 / ${data.atomicUnits.length} 原子单元`],
-    ["Node B", `${data.openLedger.length} 条编码账本`],
-    ["Node C", `${data.categoryEntries.length} 个轴心类属`],
-    ["Node D", `${data.memos.length} 条 memo`],
-    ["Node E", data.selective.core_category || "无"],
-    ["Output", data.coverage.node_b_coverage_status || "unknown"],
+    ["来源案例", `${data.sources.length} 份`],
+    ["证据摘录", `${data.evidenceItems.length} 条`],
+    ["子类属", `${data.subcategoryEntries.length} 个`],
+    ["轴心范畴", `${data.categoryEntries.length} 个`],
+    ["反馈回路", `${data.loops.length} 条`],
+    ["替代路径", `${data.pathways.length} 条`],
   ];
 
   root.innerHTML = summaryItems
@@ -403,44 +452,149 @@ function renderNodeSummary() {
     .join("");
 }
 
-function renderHierarchy() {
+function renderSourceAtlas() {
+  const data = state.currentData;
+  const links = buildActiveLinks();
+  const sourceList = document.getElementById("source-list");
+
+  sourceList.innerHTML = data.sources
+    .map((source) =>
+      sourceCard({
+        source,
+        className: cardStateClass(`source:${source.id}`, links),
+      })
+    )
+    .join("");
+
+  bindSelectableCards(".source-card");
+
+  const focusedSource = resolveFocusedSource(data);
+  const title = document.getElementById("source-detail-title");
+  const content = document.getElementById("source-detail-content");
+
+  if (!focusedSource) {
+    title.textContent = "请选择一个来源文件";
+    content.innerHTML = "";
+    return;
+  }
+
+  title.textContent = focusedSource.label;
+  content.innerHTML = `
+    <div class="detail-card">
+      <h5>基本信息</h5>
+      <div class="meta-row">
+        ${pill(`开放编码文件：${focusedSource.openCodingFile}`)}
+        ${focusedSource.docxFile ? pill(`原始文件：${focusedSource.docxFile}`) : ""}
+        ${focusedSource.group ? pill(`分组：${focusedSource.group}`) : ""}
+        ${focusedSource.year ? pill(`年级：${focusedSource.year}`) : ""}
+        ${focusedSource.status ? pill(`状态：${focusedSource.status}`) : ""}
+        ${focusedSource.lineCount ? pill(`行数：${focusedSource.lineCount}`) : ""}
+      </div>
+    </div>
+    <div class="detail-card">
+      <h5>进入理论链路</h5>
+      <div class="meta-row">
+        ${interactivePills(focusedSource.subcategoryIds, "subcategory")}
+      </div>
+      <div class="meta-row">
+        ${interactivePills(focusedSource.categoryIds, "category")}
+      </div>
+      <div class="meta-row">
+        ${interactiveTheoryPills(focusedSource.dimensionIds)}
+      </div>
+    </div>
+    <div class="detail-card scroll-card">
+      <h5>相关证据摘录 (${focusedSource.evidenceIds.length})</h5>
+      ${evidenceListMarkup(focusedSource.evidenceIds.map((id) => data.evidenceMap.get(id)).filter(Boolean))}
+    </div>
+    <div class="detail-card">
+      <h5>路径关联</h5>
+      ${focusedSource.pathwayIds.length ? interactivePills(focusedSource.pathwayIds, "pathway", data.pathwayMap) : "<p>暂无直接匹配的代表性路径。</p>"}
+    </div>
+  `;
+
+  bindSelectionTargets(content);
+}
+
+function sourceCard({ source, className }) {
+  return `
+    <button class="source-card${className}" data-type="source" data-id="${escapeHtml(source.id)}">
+      <span class="item-title">${escapeHtml(source.label)}</span>
+      <span class="item-meta">
+        ${source.group ? `<span class="meta-chip">${escapeHtml(source.group)}</span>` : ""}
+        ${source.year ? `<span class="meta-chip">${escapeHtml(source.year)}</span>` : ""}
+        ${source.status ? `<span class="meta-chip">${escapeHtml(source.status)}</span>` : ""}
+        ${source.lineCount ? `<span class="meta-chip">${escapeHtml(String(source.lineCount))} 行</span>` : ""}
+      </span>
+      <span class="item-copy">${escapeHtml(
+        `${source.evidenceIds.length} 条证据 / ${source.subcategoryIds.length} 个子类属 / ${source.categoryIds.length} 个轴心范畴`
+      )}</span>
+    </button>
+  `;
+}
+
+function renderCodingLadder() {
   const data = state.currentData;
   const links = buildActiveLinks();
 
-  document.getElementById("segments-column").innerHTML = data.nodeA
-    .map((segment) =>
-      hierarchyItem({
-        key: `segment:${segment.segment_id}`,
-        title: `${segment.segment_id} ${segment.label || ""}`.trim(),
-        meta: [`${segment.unit_count || segment.atomic_unit_ids?.length || 0} 个原子单元`],
-        type: "segment",
-        id: segment.segment_id,
+  document.getElementById("sources-column").innerHTML = data.sources
+    .map((source) =>
+      ladderItem({
+        key: `source:${source.id}`,
+        title: source.label,
+        copy: source.openCodingFile,
+        meta: [source.group, source.year, source.status].filter(Boolean),
+        type: "source",
+        id: source.id,
         links,
       })
     )
     .join("");
 
-  document.getElementById("codes-column").innerHTML = data.codeItems
-    .map((codeItem) =>
-      hierarchyItem({
-        key: `code:${codeItem.code}`,
-        title: codeItem.code,
-        meta: [`${codeItem.segmentIds.length} 个片段`, `${codeItem.count} 次出现`],
-        type: "code",
-        id: codeItem.code,
-        links,
-      })
-    )
-    .join("");
-
-  document.getElementById("categories-column").innerHTML = data.categoryEntries
-    .map((category) =>
-      hierarchyItem({
-        key: `category:${category.id}`,
-        title: category.id,
+  document.getElementById("evidence-column").innerHTML = data.evidenceItems
+    .map((evidence) =>
+      ladderItem({
+        key: `evidence:${evidence.id}`,
+        title: evidence.excerpt,
+        copy: evidence.citation ? `[${evidence.citation}]` : "无显式引文标签",
         meta: [
-          `${(category.codes || []).length} 个代码`,
-          `${(category.segment_ids || []).length} 个片段`,
+          evidence.sourceId ? data.sourceMap.get(evidence.sourceId)?.label : "未匹配来源",
+          evidence.subcategoryId,
+        ].filter(Boolean),
+        type: "evidence",
+        id: evidence.id,
+        links,
+      })
+    )
+    .join("");
+
+  document.getElementById("subcategory-column").innerHTML = data.subcategoryEntries
+    .map((subcategory) =>
+      ladderItem({
+        key: `subcategory:${subcategory.id}`,
+        title: `${subcategory.id} ${subcategory.name}`,
+        copy: subcategory.phenomenon || "无现象描述",
+        meta: [
+          `${subcategory.evidenceIds.length} 条证据`,
+          `${subcategory.sourceIds.length} 个来源`,
+        ],
+        type: "subcategory",
+        id: subcategory.id,
+        links,
+      })
+    )
+    .join("");
+
+  document.getElementById("category-column").innerHTML = data.categoryEntries
+    .map((category) =>
+      ladderItem({
+        key: `category:${category.id}`,
+        title: `${category.id} ${category.name}`,
+        copy: category.description,
+        meta: [
+          `${category.subcategoryIds.length} 个子类属`,
+          `${category.sourceIds.length} 个来源`,
+          `${category.dimensionId} 维度`,
         ],
         type: "category",
         id: category.id,
@@ -449,151 +603,173 @@ function renderHierarchy() {
     )
     .join("");
 
-  const dimensions = Object.entries(data.framework.framework_dimensions || {});
-  const selectiveCards = [
-    hierarchyItem({
-      key: "core:core",
-      title: data.selective.core_category || "核心范畴",
-      meta: [`${data.categoryEntries.length} 个类属被整合`],
+  const theoryNodes = [
+    {
       type: "core",
       id: "core",
-      links,
-    }),
-    ...dimensions.map(([dimensionId, value]) =>
-      hierarchyItem({
-        key: `dimension:${dimensionId}`,
-        title: `${dimensionId} ${value.name || ""}`.trim(),
-        meta: [
-          `${(data.dimensionToCategories.get(dimensionId) || new Set()).size} 个类属映射`,
-        ],
-        type: "dimension",
-        id: dimensionId,
+      key: "theory:core",
+      title: data.core.name || "核心范畴",
+      copy: data.core.description || "",
+      meta: ["核心范畴"],
+    },
+    ...data.dimensions.map((dimension) => ({
+      type: "dimension",
+      id: dimension.id,
+      key: `theory:${dimension.id}`,
+      title: `${dimension.id} ${dimension.name}`,
+      copy: dimension.definition,
+      meta: [
+        `${dimension.categoryIds.length} 个轴心范畴`,
+        `${dimension.sourceIds.length} 个来源`,
+      ],
+    })),
+  ];
+
+  document.getElementById("theory-column").innerHTML = theoryNodes
+    .map((node) =>
+      ladderItem({
+        key: node.key,
+        title: node.title,
+        copy: node.copy,
+        meta: node.meta,
+        type: node.type,
+        id: node.id,
         links,
       })
-    ),
-  ];
-  document.getElementById("selective-column").innerHTML = selectiveCards.join("");
+    )
+    .join("");
 
-  bindHierarchyEvents();
+  bindSelectableCards(".hierarchy-item");
 }
 
-function hierarchyItem({ key, title, meta, type, id, links }) {
-  const stateClass =
-    links.active.has(key) ? " active" : links.connected.has(key) ? " connected" : links.faded.has(key) ? " faded" : "";
-
+function ladderItem({ key, title, copy, meta, type, id, links }) {
   return `
-    <button class="hierarchy-item${stateClass}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
+    <button class="hierarchy-item${cardStateClass(key, links)}" data-type="${escapeHtml(type)}" data-id="${escapeHtml(id)}">
       <span class="item-title">${escapeHtml(title)}</span>
+      ${copy ? `<span class="item-copy">${escapeHtml(copy)}</span>` : ""}
       <span class="item-meta">
         ${(meta || [])
-          .map((item) => `<span class="meta-chip">${escapeHtml(item)}</span>`)
+          .map((item) => `<span class="meta-chip">${escapeHtml(String(item))}</span>`)
           .join("")}
       </span>
     </button>
   `;
 }
 
-function bindHierarchyEvents() {
-  document.querySelectorAll(".hierarchy-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selection = {
-        type: button.dataset.type,
-        id: button.dataset.id,
-      };
-      renderHierarchy();
-      renderSelectionPanel();
-      syncAtomicUnitSelectionFromCurrentSelection();
-      renderAtomicUnits();
-      renderFrameworkPanels();
-    });
-  });
-}
-
 function renderSelectionPanel() {
   const data = state.currentData;
   const panel = document.getElementById("selection-panel");
-  const selection = state.selection;
+  const selection = state.selection || { type: "core", id: "core" };
 
-  let title = "核心范畴";
-  let body = data.selective.theory_storyline || data.finalOutput.core_theory || "";
+  let title = data.core.name || "核心范畴";
+  let body = data.selective.theoretical_storyline?.detailed_narrative || data.core.description || "";
   let rightColumn = [
-    detailCard(
-      "理论张力",
-      pillMarkup(data.tensions || [])
-    ),
-    detailCard(
-      "边界条件",
-      objectMarkup(data.selective.boundary_conditions || {})
-    ),
-    detailCard(
-      "负例",
-      listMarkup(data.selective.negative_cases || [])
-    ),
+    detailCard("促进条件", listMarkup(data.core.facilitating)),
+    detailCard("限制条件", listMarkup(data.core.constraining)),
+    detailCard("后果", objectMarkup(data.core.consequences)),
   ];
 
-  if (selection.type === "segment") {
-    const segment = data.segmentMap.get(selection.id);
-    title = `${segment.segment_id} ${segment.label || ""}`.trim();
-    body = segment.source_text;
+  if (selection.type === "source") {
+    const source = data.sourceMap.get(selection.id);
+    title = `来源案例：${source.label}`;
+    body = [
+      `开放编码文件：${source.openCodingFile}`,
+      source.docxFile ? `原始文件：${source.docxFile}` : "原始文件：未匹配",
+      source.group ? `分组：${source.group}` : null,
+      source.year ? `年级：${source.year}` : null,
+      source.status ? `状态：${source.status}` : null,
+      source.lineCount ? `开放编码行数：${source.lineCount}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
     rightColumn = [
-      detailCard("开放编码", pillMarkup(data.segmentToCodes.get(segment.segment_id) || [])),
-      detailCard(
-        "轴心类属",
-        pillMarkup(Array.from(data.segmentToCategories.get(segment.segment_id) || []))
-      ),
-      detailCard(
-        "原子单元",
-        atomicUnitPillMarkup(segment.atomic_unit_ids || [])
-      ),
-      detailCard(
-        "跨度信息",
-        `<p>${segment.source_span_start} - ${segment.source_span_end}</p>`
-      ),
+      detailCard("证据摘录", evidenceListMarkup(source.evidenceIds.map((id) => data.evidenceMap.get(id)).filter(Boolean))),
+      detailCard("进入的子类属", interactivePills(source.subcategoryIds, "subcategory")),
+      detailCard("进入的轴心范畴", interactivePills(source.categoryIds, "category")),
+      detailCard("进入的理论维度", interactiveTheoryPills(source.dimensionIds)),
     ];
-  } else if (selection.type === "code") {
-    const code = selection.id;
-    const codeEntry = data.codeItems.find((item) => item.code === code);
-    title = `开放编码：${code}`;
-    body = `该开放编码出现在 ${codeEntry.segmentIds.length} 个片段中，可直接跳回原始切片审计其语境。`;
+  } else if (selection.type === "evidence") {
+    const evidence = data.evidenceMap.get(selection.id);
+    title = "证据摘录";
+    body = evidence.raw;
     rightColumn = [
-      detailCard("相关片段", pillMarkup(codeEntry.segmentIds)),
       detailCard(
-        "归属轴心类属",
-        pillMarkup(Array.from(data.codeToCategories.get(code) || []))
+        "来源案例",
+        evidence.sourceId ? interactivePills([evidence.sourceId], "source", data.sourceMap) : "<p>未匹配来源。</p>"
       ),
-      detailCard("片段标签", pillMarkup(codeEntry.labels)),
+      detailCard("子类属", interactivePills([evidence.subcategoryId], "subcategory")),
+      detailCard("轴心范畴", interactivePills([evidence.categoryId], "category")),
+      detailCard("理论维度", interactiveTheoryPills([evidence.dimensionId])),
+    ];
+  } else if (selection.type === "subcategory") {
+    const subcategory = data.subcategoryMap.get(selection.id);
+    title = `${subcategory.id} ${subcategory.name}`;
+    body = [
+      `现象：${subcategory.phenomenon || "无"}`,
+      formatParadigm(subcategory.paradigm),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    rightColumn = [
+      detailCard("所属轴心范畴", interactivePills([subcategory.categoryId], "category")),
+      detailCard("来源案例", interactivePills(subcategory.sourceIds, "source", data.sourceMap)),
+      detailCard(
+        "证据摘录",
+        evidenceListMarkup(subcategory.evidenceIds.map((id) => data.evidenceMap.get(id)).filter(Boolean))
+      ),
     ];
   } else if (selection.type === "category") {
-    const category = data.categoryEntries.find((item) => item.id === selection.id);
-    title = `轴心类属：${category.id}`;
-    body = [
-      `条件：${category.conditions || "无"}`,
-      `行动/互动：${category.actions || "无"}`,
-      `后果：${category.consequences || "无"}`,
-    ].join("\n\n");
+    const category = data.categoryMap.get(selection.id);
+    title = `${category.id} ${category.name}`;
+    body = category.description || "无额外说明";
     rightColumn = [
-      detailCard("下属代码", pillMarkup(category.codes || [])),
-      detailCard("相关片段", pillMarkup(category.segment_ids || [])),
-      detailCard(
-        "框架维度",
-        pillMarkup(Array.from(data.categoryToDimensions.get(category.id) || []))
-      ),
+      detailCard("子类属", interactivePills(category.subcategoryIds, "subcategory")),
+      detailCard("来源案例", interactivePills(category.sourceIds, "source", data.sourceMap)),
+      detailCard("理论维度", interactiveTheoryPills([category.dimensionId])),
+      detailCard("跨范畴关系", relationMarkup(category.relations)),
     ];
   } else if (selection.type === "dimension") {
-    const dimension = data.framework.framework_dimensions?.[selection.id];
-    const analysisKey = Object.keys(data.framework.dimension_analysis || {}).find((key) =>
-      key.startsWith(`${selection.id}_`)
-    );
-    const analysis = analysisKey ? data.framework.dimension_analysis[analysisKey] : null;
-    title = `${selection.id} ${dimension?.name || ""}`.trim();
-    body = analysis?.description || dimension?.definition || "无额外说明";
+    const dimension = data.dimensionMap.get(selection.id);
+    title = `${dimension.id} ${dimension.name}`;
+    body = dimension.definition || "无额外定义。";
     rightColumn = [
-      detailCard(
-        "映射轴心类属",
-        pillMarkup(Array.from(data.dimensionToCategories.get(selection.id) || []))
-      ),
-      detailCard("支持片段", pillMarkup(analysis?.supporting_segments || [])),
-      detailCard("支持代码", pillMarkup(analysis?.supporting_codes || [])),
+      detailCard("轴心范畴", interactivePills(dimension.categoryIds, "category")),
+      detailCard("来源案例", interactivePills(dimension.sourceIds, "source", data.sourceMap)),
+      detailCard("阶段叙述", phaseDimensionMarkup(data.phases, dimension.id)),
+    ];
+  } else if (selection.type === "phase") {
+    const phase = data.phaseMap.get(selection.id);
+    title = phase.name;
+    body = [
+      `时间范围：${phase.timeframe || "无"}`,
+      `L：${phase.L || "无"}`,
+      `I：${phase.I || "无"}`,
+      `V：${phase.V || "无"}`,
+    ].join("\n");
+    rightColumn = [
+      detailCard("关键事件", listMarkup(phase.keyEvents)),
+      detailCard("典型学生", listMarkup(phase.typicalStudents)),
+      detailCard("相关维度", interactiveTheoryPills(["L", "I", "V"])),
+    ];
+  } else if (selection.type === "loop") {
+    const loop = data.loopMap.get(selection.id);
+    title = loop.name;
+    body = loop.description || "";
+    rightColumn = [
+      detailCard("方向", `<p>${escapeHtml(loop.direction || "未标注")}</p>`),
+      detailCard("涉及范畴", interactivePills(loop.categoryIds, "category")),
+      detailCard("涉及维度", interactiveTheoryPills(loop.dimensionIds)),
+    ];
+  } else if (selection.type === "pathway") {
+    const pathway = data.pathwayMap.get(selection.id);
+    title = pathway.name;
+    body = pathway.description || "";
+    rightColumn = [
+      detailCard("指标", listMarkup(pathway.indicators)),
+      detailCard("代表性案例", listMarkup(pathway.representativeCases)),
+      detailCard("匹配来源", interactivePills(pathway.sourceIds, "source", data.sourceMap)),
     ];
   }
 
@@ -609,12 +785,7 @@ function renderSelectionPanel() {
     </div>
   `;
 
-  panel.querySelectorAll(".atomic-pill").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.activeAtomicUnitId = button.dataset.unitId;
-      renderAtomicUnits();
-    });
-  });
+  bindSelectionTargets(panel);
 }
 
 function detailCard(title, content) {
@@ -626,194 +797,63 @@ function detailCard(title, content) {
   `;
 }
 
-function pillMarkup(items) {
-  if (!items?.length) {
-    return `<p>无</p>`;
-  }
-  return `<div class="pill-list">${items
-    .map((item) => `<span class="pill">${escapeHtml(String(item))}</span>`)
-    .join("")}</div>`;
-}
-
-function atomicUnitPillMarkup(items) {
-  if (!items?.length) {
-    return `<p>无</p>`;
-  }
-  return `<div class="pill-list">${items
-    .map(
-      (item) =>
-        `<button class="pill atomic-pill" type="button" data-unit-id="${escapeHtml(String(item))}">${escapeHtml(
-          String(item)
-        )}</button>`
-    )
-    .join("")}</div>`;
-}
-
-function listMarkup(items) {
-  if (!items?.length) {
-    return `<p>无</p>`;
-  }
-  return items.map((item) => `<p>${escapeHtml(String(item))}</p>`).join("");
-}
-
-function objectMarkup(record) {
-  const entries = Object.entries(record || {});
-  if (!entries.length) {
-    return `<p>无</p>`;
-  }
-  return entries
-    .map(
-      ([key, value]) => `
-        <p><strong>${escapeHtml(key)}</strong><br />${escapeHtml(String(value))}</p>
-      `
-    )
-    .join("");
-}
-
-function renderFrameworkPanels() {
+function renderTheoryPanels() {
   const data = state.currentData;
   const links = buildActiveLinks();
 
-  const dimensionRoot = document.getElementById("framework-dimensions");
-  dimensionRoot.innerHTML = Object.entries(data.framework.framework_dimensions || {})
-    .map(([id, dimension]) => {
-      const key = `dimension:${id}`;
-      const className =
-        links.active.has(key) ? " active" : links.connected.has(key) ? " connected" : links.faded.has(key) ? " faded" : "";
-      return `
-        <button class="dimension-item${className}" data-type="dimension" data-id="${escapeHtml(id)}">
-          <h5>${escapeHtml(id)} ${escapeHtml(dimension.name || "")}</h5>
+  document.getElementById("framework-dimensions").innerHTML = data.dimensions
+    .map(
+      (dimension) => `
+        <button class="dimension-item${cardStateClass(`theory:${dimension.id}`, links)}" data-type="dimension" data-id="${escapeHtml(
+          dimension.id
+        )}">
+          <h5>${escapeHtml(`${dimension.id} ${dimension.name}`)}</h5>
           <p>${escapeHtml(dimension.definition || "")}</p>
         </button>
-      `;
-    })
-    .join("");
-
-  document.querySelectorAll(".dimension-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selection = { type: "dimension", id: button.dataset.id };
-      renderHierarchy();
-      renderSelectionPanel();
-      syncAtomicUnitSelectionFromCurrentSelection();
-      renderAtomicUnits();
-      renderFrameworkPanels();
-    });
-  });
-
-  const relationRoot = document.getElementById("relations-list");
-  relationRoot.innerHTML = (data.relations || [])
-    .map((relation) => {
-      const key = `relation:${relation.from}:${relation.to}`;
-      const connected =
-        state.selection.type === "category" &&
-        (state.selection.id === relation.from || state.selection.id === relation.to);
-      return `
-        <div class="relation-item${connected ? " connected" : ""}" data-key="${escapeHtml(key)}">
-          <h5>${escapeHtml(relation.from)} → ${escapeHtml(relation.to)}</h5>
-          <p>${escapeHtml(relation.relation || "")}</p>
-        </div>
-      `;
-    })
-    .join("");
-
-  const memoRoot = document.getElementById("memo-list");
-  const memoCards = [
-    ...(data.memos || []).map((memo) => ({
-      title: `${memo.memo_id} ${memo.category}`,
-      copy: memo.content,
-      connected: state.selection.type === "category" && memo.category === state.selection.id,
-    })),
-    ...(data.rivalExplanations || []).map((item) => ({
-      title: item.explanation_id,
-      copy: `${item.content}\n\n含义：${item.implication}`,
-      connected: false,
-    })),
-  ];
-  memoRoot.innerHTML = memoCards
-    .map(
-      (memo) => `
-        <div class="memo-item${memo.connected ? " connected" : ""}">
-          <h5>${escapeHtml(memo.title)}</h5>
-          <p>${escapeHtml(memo.copy)}</p>
-        </div>
       `
     )
     .join("");
-}
 
-function renderAtomicUnits() {
-  const data = state.currentData;
-  const listRoot = document.getElementById("atomic-list");
-  const titleRoot = document.getElementById("atomic-title");
-  const contentRoot = document.getElementById("atomic-content");
-
-  if (!data) {
-    listRoot.innerHTML = "";
-    titleRoot.textContent = "请选择一个原子单元";
-    contentRoot.textContent = "";
-    return;
-  }
-
-  const highlightedSegmentId = state.selection.type === "segment" ? state.selection.id : null;
-
-  listRoot.innerHTML = data.atomicUnits
-    .map((unit) => {
-      const segmentId = data.atomicUnitToSegment.get(unit.unit_id);
-      const isActive = unit.unit_id === state.activeAtomicUnitId;
-      const isConnected = highlightedSegmentId && segmentId === highlightedSegmentId;
-      return `
-        <button class="atomic-item${isActive ? " active" : isConnected ? " connected" : ""}" data-unit-id="${escapeHtml(
-          unit.unit_id
+  document.getElementById("phase-list").innerHTML = data.phases
+    .map(
+      (phase) => `
+        <button class="dimension-item${selectionClass("phase", phase.id)}" data-type="phase" data-id="${escapeHtml(
+          phase.id
         )}">
-          <strong>${escapeHtml(unit.unit_id)}</strong>
-          <div class="atomic-meta">
-            <span class="meta-chip">${escapeHtml(segmentId || "未映射片段")}</span>
-            <span class="meta-chip">${escapeHtml(String(unit.char_length || 0))} 字符</span>
-            <span class="meta-chip">${escapeHtml(
-              `${unit.source_span_start ?? "-"} - ${unit.source_span_end ?? "-"}`
-            )}</span>
-          </div>
+          <h5>${escapeHtml(phase.name)}</h5>
+          <p>${escapeHtml(phase.timeframe || "")}</p>
         </button>
-      `;
-    })
+      `
+    )
     .join("");
 
-  listRoot.querySelectorAll(".atomic-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.activeAtomicUnitId = button.dataset.unitId;
-      const segmentId = data.atomicUnitToSegment.get(button.dataset.unitId);
-      if (segmentId) {
-        state.selection = { type: "segment", id: segmentId };
-        renderHierarchy();
-        renderSelectionPanel();
-        renderFrameworkPanels();
-      }
-      renderAtomicUnits();
-    });
-  });
+  document.getElementById("loop-list").innerHTML = data.loops
+    .map(
+      (loop) => `
+        <button class="relation-item${selectionClass("loop", loop.id)}" data-type="loop" data-id="${escapeHtml(loop.id)}">
+          <h5>${escapeHtml(loop.name)}</h5>
+          <p>${escapeHtml(loop.description || "")}</p>
+        </button>
+      `
+    )
+    .join("");
 
-  const activeUnit = data.atomicUnitMap.get(state.activeAtomicUnitId) || data.atomicUnits[0] || null;
-  if (!activeUnit) {
-    titleRoot.textContent = "请选择一个原子单元";
-    contentRoot.textContent = "";
-    return;
-  }
+  document.getElementById("pathway-list").innerHTML = data.pathways
+    .map(
+      (pathway) => `
+        <button class="memo-item${selectionClass("pathway", pathway.id)}" data-type="pathway" data-id="${escapeHtml(
+          pathway.id
+        )}">
+          <h5>${escapeHtml(pathway.name)}</h5>
+          <p>${escapeHtml(pathway.description || "")}</p>
+        </button>
+      `
+    )
+    .join("");
 
-  if (!state.activeAtomicUnitId) {
-    state.activeAtomicUnitId = activeUnit.unit_id;
-  }
-
-  const mappedSegmentId = data.atomicUnitToSegment.get(activeUnit.unit_id);
-  titleRoot.textContent = `${activeUnit.unit_id}${mappedSegmentId ? ` -> ${mappedSegmentId}` : ""}`;
-  contentRoot.innerHTML = `
-    <p><strong>所属片段：</strong>${escapeHtml(mappedSegmentId || "未映射")}</p>
-    <p><strong>原文跨度：</strong>${escapeHtml(
-      `${activeUnit.source_span_start ?? "-"} - ${activeUnit.source_span_end ?? "-"}`
-    )}</p>
-    <p><strong>字符数：</strong>${escapeHtml(String(activeUnit.char_length || 0))}</p>
-    <p><strong>原文内容：</strong></p>
-    <p>${escapeHtml(activeUnit.source_text || "")}</p>
-  `;
+  bindSelectableCards(".dimension-item");
+  bindSelectableCards(".relation-item");
+  bindSelectableCards(".memo-item");
 }
 
 function renderArtifactBrowser() {
@@ -826,9 +866,7 @@ function renderArtifactBrowser() {
     .map((artifact) => {
       const isActive = artifact.label === state.activeArtifactLabel;
       return `
-        <button class="artifact-item${isActive ? " active" : ""}" data-label="${escapeHtml(
-        artifact.label
-      )}">
+        <button class="artifact-item${isActive ? " active" : ""}" data-label="${escapeHtml(artifact.label)}">
           <strong>${escapeHtml(artifact.label)}</strong>
           <small>${escapeHtml(artifact.kind)}</small>
         </button>
@@ -862,6 +900,38 @@ function renderArtifactBrowser() {
   }
 }
 
+function bindSelectableCards(selector) {
+  document.querySelectorAll(selector).forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selection = {
+        type: button.dataset.type,
+        id: button.dataset.id,
+      };
+      rerenderSelectionDrivenViews();
+    });
+  });
+}
+
+function bindSelectionTargets(root) {
+  root.querySelectorAll("[data-select-type][data-select-id]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      state.selection = {
+        type: element.dataset.selectType,
+        id: element.dataset.selectId,
+      };
+      rerenderSelectionDrivenViews();
+    });
+  });
+}
+
+function rerenderSelectionDrivenViews() {
+  renderSourceAtlas();
+  renderCodingLadder();
+  renderSelectionPanel();
+  renderTheoryPanels();
+}
+
 function buildActiveLinks() {
   const data = state.currentData;
   const links = {
@@ -870,74 +940,23 @@ function buildActiveLinks() {
     faded: new Set(),
   };
 
-  const addActive = (type, id) => links.active.add(`${type}:${id}`);
-  const addConnected = (type, id) => links.connected.add(`${type}:${id}`);
-
-  if (!state.selection?.type) return links;
-
-  if (state.selection.type === "core") {
-    addActive("core", "core");
-    data.categoryEntries.forEach((category) => addConnected("category", category.id));
+  if (!data || !state.selection) {
     return links;
   }
 
-  if (state.selection.type === "segment") {
-    const segmentId = state.selection.id;
-    addActive("segment", segmentId);
-    (data.segmentToCodes.get(segmentId) || []).forEach((code) => {
-      addConnected("code", code);
-      (data.codeToCategories.get(code) || []).forEach((categoryId) => {
-        addConnected("category", categoryId);
-      });
-    });
-  }
+  const context = selectionContext(data, state.selection);
 
-  if (state.selection.type === "code") {
-    const code = state.selection.id;
-    addActive("code", code);
-    (data.codeItems.find((item) => item.code === code)?.segmentIds || []).forEach((segmentId) => {
-      addConnected("segment", segmentId);
-    });
-    (data.codeToCategories.get(code) || []).forEach((categoryId) => {
-      addConnected("category", categoryId);
-      (data.categoryToDimensions.get(categoryId) || []).forEach((dimensionId) => {
-        addConnected("dimension", dimensionId);
-      });
-    });
-  }
+  context.active.forEach((key) => links.active.add(key));
+  context.connected.forEach((key) => links.connected.add(key));
 
-  if (state.selection.type === "category") {
-    const categoryId = state.selection.id;
-    addActive("category", categoryId);
-    const category = data.categoryEntries.find((entry) => entry.id === categoryId);
-    (category?.codes || []).forEach((code) => addConnected("code", code));
-    (category?.segment_ids || []).forEach((segmentId) => addConnected("segment", segmentId));
-    (data.categoryToDimensions.get(categoryId) || []).forEach((dimensionId) =>
-      addConnected("dimension", dimensionId)
-    );
-    addConnected("core", "core");
-  }
-
-  if (state.selection.type === "dimension") {
-    const dimensionId = state.selection.id;
-    addActive("dimension", dimensionId);
-    (data.dimensionToCategories.get(dimensionId) || []).forEach((categoryId) => {
-      addConnected("category", categoryId);
-      const category = data.categoryEntries.find((entry) => entry.id === categoryId);
-      (category?.codes || []).forEach((code) => addConnected("code", code));
-      (category?.segment_ids || []).forEach((segmentId) => addConnected("segment", segmentId));
-    });
-    addConnected("core", "core");
-  }
-
-  const allKeys = [];
-  data.nodeA.forEach((segment) => allKeys.push(`segment:${segment.segment_id}`));
-  data.codeItems.forEach((item) => allKeys.push(`code:${item.code}`));
-  data.categoryEntries.forEach((item) => allKeys.push(`category:${item.id}`));
-  Object.keys(data.framework.framework_dimensions || {}).forEach((id) =>
-    allKeys.push(`dimension:${id}`)
-  );
-  allKeys.push("core:core");
+  const allKeys = [
+    ...data.sources.map((source) => `source:${source.id}`),
+    ...data.evidenceItems.map((evidence) => `evidence:${evidence.id}`),
+    ...data.subcategoryEntries.map((subcategory) => `subcategory:${subcategory.id}`),
+    ...data.categoryEntries.map((category) => `category:${category.id}`),
+    "theory:core",
+    ...data.dimensions.map((dimension) => `theory:${dimension.id}`),
+  ];
 
   if (links.active.size || links.connected.size) {
     allKeys.forEach((key) => {
@@ -950,6 +969,644 @@ function buildActiveLinks() {
   return links;
 }
 
+function selectionContext(data, selection) {
+  const active = new Set();
+  const connected = new Set();
+  const activate = (key) => active.add(key);
+  const connect = (key) => connected.add(key);
+  const connectCore = () => connect("theory:core");
+
+  if (selection.type === "core") {
+    activate("theory:core");
+    return { active, connected };
+  }
+
+  if (selection.type === "source") {
+    const source = data.sourceMap.get(selection.id);
+    if (!source) return { active, connected };
+    activate(`source:${source.id}`);
+    source.evidenceIds.forEach((id) => connect(`evidence:${id}`));
+    source.subcategoryIds.forEach((id) => connect(`subcategory:${id}`));
+    source.categoryIds.forEach((id) => connect(`category:${id}`));
+    source.dimensionIds.forEach((id) => connect(`theory:${id}`));
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "evidence") {
+    const evidence = data.evidenceMap.get(selection.id);
+    if (!evidence) return { active, connected };
+    activate(`evidence:${evidence.id}`);
+    if (evidence.sourceId) connect(`source:${evidence.sourceId}`);
+    connect(`subcategory:${evidence.subcategoryId}`);
+    connect(`category:${evidence.categoryId}`);
+    connect(`theory:${evidence.dimensionId}`);
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "subcategory") {
+    const subcategory = data.subcategoryMap.get(selection.id);
+    if (!subcategory) return { active, connected };
+    activate(`subcategory:${subcategory.id}`);
+    subcategory.evidenceIds.forEach((id) => connect(`evidence:${id}`));
+    subcategory.sourceIds.forEach((id) => connect(`source:${id}`));
+    connect(`category:${subcategory.categoryId}`);
+    connect(`theory:${subcategory.dimensionId}`);
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "category") {
+    const category = data.categoryMap.get(selection.id);
+    if (!category) return { active, connected };
+    activate(`category:${category.id}`);
+    category.subcategoryIds.forEach((id) => connect(`subcategory:${id}`));
+    category.evidenceIds.forEach((id) => connect(`evidence:${id}`));
+    category.sourceIds.forEach((id) => connect(`source:${id}`));
+    connect(`theory:${category.dimensionId}`);
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "dimension") {
+    const dimension = data.dimensionMap.get(selection.id);
+    if (!dimension) return { active, connected };
+    activate(`theory:${dimension.id}`);
+    dimension.categoryIds.forEach((id) => connect(`category:${id}`));
+    dimension.subcategoryIds.forEach((id) => connect(`subcategory:${id}`));
+    dimension.evidenceIds.forEach((id) => connect(`evidence:${id}`));
+    dimension.sourceIds.forEach((id) => connect(`source:${id}`));
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "phase") {
+    activate(`phase:${selection.id}`);
+    ["L", "I", "V"].forEach((id) => connect(`theory:${id}`));
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "loop") {
+    const loop = data.loopMap.get(selection.id);
+    if (!loop) return { active, connected };
+    activate(`loop:${loop.id}`);
+    loop.categoryIds.forEach((id) => connect(`category:${id}`));
+    loop.dimensionIds.forEach((id) => connect(`theory:${id}`));
+    loop.sourceIds.forEach((id) => connect(`source:${id}`));
+    connectCore();
+    return { active, connected };
+  }
+
+  if (selection.type === "pathway") {
+    const pathway = data.pathwayMap.get(selection.id);
+    if (!pathway) return { active, connected };
+    activate(`pathway:${pathway.id}`);
+    pathway.sourceIds.forEach((id) => connect(`source:${id}`));
+    connectCore();
+    return { active, connected };
+  }
+
+  return { active, connected };
+}
+
+function resolveFocusedSource(data) {
+  if (!data.sources.length) {
+    return null;
+  }
+
+  if (state.selection.type === "source") {
+    return data.sourceMap.get(state.selection.id) || data.sources[0];
+  }
+
+  if (state.selection.type === "evidence") {
+    const evidence = data.evidenceMap.get(state.selection.id);
+    return evidence?.sourceId ? data.sourceMap.get(evidence.sourceId) : data.sources[0];
+  }
+
+  if (state.selection.type === "subcategory") {
+    const subcategory = data.subcategoryMap.get(state.selection.id);
+    return subcategory?.sourceIds?.[0] ? data.sourceMap.get(subcategory.sourceIds[0]) : data.sources[0];
+  }
+
+  if (state.selection.type === "category") {
+    const category = data.categoryMap.get(state.selection.id);
+    return category?.sourceIds?.[0] ? data.sourceMap.get(category.sourceIds[0]) : data.sources[0];
+  }
+
+  if (state.selection.type === "dimension") {
+    const dimension = data.dimensionMap.get(state.selection.id);
+    return dimension?.sourceIds?.[0] ? data.sourceMap.get(dimension.sourceIds[0]) : data.sources[0];
+  }
+
+  if (state.selection.type === "pathway") {
+    const pathway = data.pathwayMap.get(state.selection.id);
+    return pathway?.sourceIds?.[0] ? data.sourceMap.get(pathway.sourceIds[0]) : data.sources[0];
+  }
+
+  return data.sources[0];
+}
+
+function buildSourceEntries(openSummary, sourceDocArtifacts, progressIndex) {
+  const docxPaths = sourceDocArtifacts.map((artifact) => artifact.label);
+  const sourceFiles = Array.isArray(openSummary.source_files) ? openSummary.source_files : [];
+
+  return sourceFiles.map((openCodingFile, index) => {
+    const progressMeta = progressIndex.byFile.get(openCodingFile) || {};
+    const baseLabel = stripOpenCodingSuffix(openCodingFile);
+    const docxFile = bestDocxMatch(baseLabel, docxPaths);
+    return {
+      id: baseLabel,
+      sequence: Number(progressMeta.sequence || index + 1),
+      label: baseLabel,
+      openCodingFile,
+      docxFile,
+      group: progressMeta.group || inferGroup(baseLabel),
+      year: progressMeta.year || inferYear(baseLabel),
+      status: progressMeta.status || inferStatus(baseLabel),
+      lineCount: progressMeta.lineCount || null,
+      searchText: [baseLabel, openCodingFile, docxFile || ""].join(" "),
+      tokens: extractSearchTokens([baseLabel, openCodingFile, docxFile || ""].join(" ")),
+      evidenceIds: new Set(),
+      subcategoryIds: new Set(),
+      categoryIds: new Set(),
+      dimensionIds: new Set(),
+      pathwayIds: new Set(),
+    };
+  });
+}
+
+function buildDimensionEntries(selective, axial, categoryEntries, sourceMap, subcategoryMap, evidenceMap) {
+  const rawFramework =
+    selective.metadata?.theoretical_framework || axial.metadata?.theoretical_framework || {};
+
+  const dimensionSeed = new Map();
+  Object.entries(rawFramework).forEach(([rawId, description]) => {
+    const id = normalizeDimensionId(rawId);
+    const [name, definition] = splitFrameworkDescription(description, id);
+    dimensionSeed.set(id, { id, name, definition });
+  });
+
+  if (categoryEntries.some((entry) => entry.dimensionId === "C") && !dimensionSeed.has("C")) {
+    dimensionSeed.set("C", {
+      id: "C",
+      name: DIMENSION_META.C.name,
+      definition: "制度、关系与情绪等情境条件对转化过程的促进与约束。",
+    });
+  }
+
+  return Array.from(dimensionSeed.values())
+    .map((dimension) => {
+      const categoryIds = categoryEntries
+        .filter((entry) => entry.dimensionId === dimension.id)
+        .map((entry) => entry.id);
+      const subcategoryIds = categoryIds.flatMap((id) => dataArray(subcategoryMap, "categoryId", id).map((item) => item.id));
+      const evidenceIds = subcategoryIds.flatMap((id) => subcategoryMap.get(id)?.evidenceIds || []);
+      const sourceIds = Array.from(
+        new Set(
+          evidenceIds
+            .map((id) => evidenceMap.get(id)?.sourceId)
+            .filter(Boolean)
+        )
+      ).sort(compareNatural);
+
+      return {
+        id: dimension.id,
+        name: dimension.name,
+        definition: dimension.definition,
+        categoryIds,
+        subcategoryIds,
+        evidenceIds,
+        sourceIds,
+      };
+    })
+    .sort((a, b) => orderDimensionIds(a.id, b.id));
+}
+
+function buildPhaseEntries(selective) {
+  return (selective.integrated_model?.phases || []).map((phase) => ({
+    id: `phase-${phase.phase}`,
+    name: phase.name || `阶段 ${phase.phase}`,
+    timeframe: phase.timeframe || "",
+    phaseNumber: phase.phase,
+    L: phase.L || "",
+    I: phase.I || "",
+    V: phase.V || "",
+    keyEvents: phase.key_events || [],
+    typicalStudents: phase.typical_students || [],
+  }));
+}
+
+function buildLoopEntries(selective, categoryMap) {
+  return (selective.integrated_model?.feedback_loops || []).map((loop, index) => {
+    const categoryIds = extractCategoryRefs(loop.description || "").filter((id) => categoryMap.has(id));
+    const dimensionIds = Array.from(
+      new Set(categoryIds.map((id) => categoryMap.get(id)?.dimensionId).filter(Boolean))
+    ).sort(orderDimensionIds);
+    const sourceIds = Array.from(
+      new Set(
+        categoryIds.flatMap((id) => categoryMap.get(id)?.sourceIds || [])
+      )
+    ).sort(compareNatural);
+    return {
+      id: `loop-${index + 1}`,
+      name: loop.loop || `反馈回路 ${index + 1}`,
+      description: loop.description || "",
+      direction: loop.direction || "",
+      categoryIds,
+      dimensionIds,
+      sourceIds,
+    };
+  });
+}
+
+function buildPathwayEntries(selective, sources) {
+  return Object.entries(selective.alternative_pathways || {}).map(([id, pathway]) => {
+    const caseTitles = pathway.representative_cases || [];
+    const sourceIds = Array.from(
+      new Set(
+        caseTitles
+          .map((title) => matchSourceId(title.split("：")[0], sources))
+          .filter(Boolean)
+      )
+    ).sort(compareNatural);
+
+    sourceIds.forEach((sourceId) => {
+      const source = sources.find((entry) => entry.id === sourceId);
+      if (source) {
+        source.pathwayIds.add(id);
+      }
+    });
+
+    return {
+      id,
+      name: pathway.name || id,
+      description: pathway.description || "",
+      indicators: pathway.indicators || [],
+      representativeCases: caseTitles,
+      sourceIds,
+    };
+  });
+}
+
+function buildCoreEntry(selective, dimensions, phases, loops, pathways) {
+  return {
+    name: selective.core_category?.name || "核心范畴",
+    description: selective.core_category?.description || "",
+    facilitating:
+      selective.core_category?.paradigm?.intervening_conditions?.facilitating || [],
+    constraining:
+      selective.core_category?.paradigm?.intervening_conditions?.constraining || [],
+    consequences: selective.core_category?.paradigm?.consequences || {},
+    dimensionIds: dimensions.map((dimension) => dimension.id),
+    phaseIds: phases.map((phase) => phase.id),
+    loopIds: loops.map((loop) => loop.id),
+    pathwayIds: pathways.map((pathway) => pathway.id),
+  };
+}
+
+function parseProgressReport(text) {
+  const byFile = new Map();
+  const summary = {};
+  let currentGroup = "";
+  let inSummaryTable = false;
+
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    if (trimmed.startsWith("### 完成统计")) {
+      inSummaryTable = true;
+      return;
+    }
+
+    if (trimmed.startsWith("#### ")) {
+      inSummaryTable = false;
+      currentGroup = trimmed.replace(/^####\s*/, "").split(" ")[0];
+      return;
+    }
+
+    if (!trimmed.startsWith("|") || trimmed.includes("---")) {
+      return;
+    }
+
+    const cells = trimmed
+      .split("|")
+      .map((cell) => cell.trim())
+      .filter(Boolean);
+
+    if (!cells.length) {
+      return;
+    }
+
+    if (inSummaryTable && cells.length === 2) {
+      summary[cells[0]] = cells[1];
+      return;
+    }
+
+    if (!cells.some((cell) => cell.includes("_开放编码.md"))) {
+      return;
+    }
+
+    if (cells.length === 3) {
+      byFile.set(cells[1], {
+        sequence: cells[0],
+        group: currentGroup,
+        lineCount: parseInt(cells[2], 10) || null,
+      });
+      return;
+    }
+
+    if (cells.length >= 5) {
+      byFile.set(cells[1], {
+        sequence: cells[0],
+        group: currentGroup,
+        year: cells[2],
+        status: cells[3],
+        lineCount: parseInt(cells[4], 10) || null,
+      });
+    }
+  });
+
+  return { byFile, summary };
+}
+
+function parseEvidence(rawValue) {
+  const match = String(rawValue).match(/^(.*?)(?:\[([^[\]]+)\])?$/);
+  return {
+    excerpt: (match?.[1] || rawValue).trim(),
+    citation: match?.[2] ? match[2].trim() : "",
+  };
+}
+
+function matchSourceId(query, sources) {
+  const queryTokens = extractSearchTokens(query);
+  if (!queryTokens.length) {
+    return null;
+  }
+
+  let bestSource = null;
+  let bestScore = 0;
+
+  sources.forEach((source) => {
+    const score = scoreSourceMatch(queryTokens, source);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSource = source;
+    }
+  });
+
+  return bestScore > 0 ? bestSource.id : null;
+}
+
+function scoreSourceMatch(queryTokens, source) {
+  let score = 0;
+  const searchText = source.searchText.toLowerCase();
+
+  queryTokens.forEach((token) => {
+    if (!token) {
+      return;
+    }
+    if (source.tokens.includes(token)) {
+      score += token.length >= 3 || /\d/.test(token) ? 5 : 3;
+    }
+    if (searchText.includes(token)) {
+      score += token.length >= 4 || /\d/.test(token) ? 4 : 2;
+    }
+    source.tokens.forEach((sourceToken) => {
+      if (sourceToken !== token && (sourceToken.includes(token) || token.includes(sourceToken))) {
+        score += 1;
+      }
+    });
+  });
+
+  return score;
+}
+
+function bestDocxMatch(label, docxPaths) {
+  const queryTokens = extractSearchTokens(label);
+  let bestPath = null;
+  let bestScore = 0;
+
+  docxPaths.forEach((path) => {
+    const pathTokens = extractSearchTokens(path);
+    let score = 0;
+    queryTokens.forEach((token) => {
+      if (pathTokens.includes(token)) {
+        score += token.length >= 3 || /\d/.test(token) ? 5 : 2;
+      }
+      if (path.toLowerCase().includes(token)) {
+        score += 1;
+      }
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      bestPath = path;
+    }
+  });
+
+  return bestScore > 0 ? bestPath : null;
+}
+
+function normalizeDimensionId(rawId) {
+  const upper = String(rawId || "").trim().toUpperCase();
+  if (upper === "L" || upper === "I" || upper === "V") {
+    return upper;
+  }
+  return "C";
+}
+
+function splitFrameworkDescription(description, fallbackId) {
+  const text = String(description || "").trim();
+  if (text.includes(" - ")) {
+    const [name, definition] = text.split(" - ", 2);
+    return [name.trim(), definition.trim()];
+  }
+  return [DIMENSION_META[fallbackId]?.name || fallbackId, text];
+}
+
+function extractCategoryRefs(text) {
+  return Array.from(new Set(String(text).match(/\b[LICV]\d[a-z]?\b/g) || []));
+}
+
+function stripOpenCodingSuffix(filename) {
+  return String(filename).replace(/_开放编码\.md$/i, "");
+}
+
+function extractSearchTokens(text) {
+  const parts = String(text)
+    .toLowerCase()
+    .match(/[\u4e00-\u9fffA-Za-z0-9]+/g);
+
+  const stopTokens = new Set(["md", "docx", "source", "开放编码", "南京大学", "访谈"]);
+  return Array.from(new Set((parts || []).filter((part) => !stopTokens.has(part))));
+}
+
+function inferGroup(label) {
+  return label.includes("匡院") || label.includes("李家琪") ? "拔尖计划" : "强基计划";
+}
+
+function inferYear(label) {
+  const match = String(label).match(/(大一|大二|大三|大四|研一)/);
+  return match ? match[1] : "";
+}
+
+function inferStatus(label) {
+  const match = String(label).match(/(在读|转段|退出)/);
+  return match ? match[1] : "";
+}
+
+function compareNatural(left, right) {
+  return String(left).localeCompare(String(right), "zh-Hans-CN", { numeric: true });
+}
+
+function orderDimensionIds(left, right) {
+  return THEORY_ORDER.indexOf(left) - THEORY_ORDER.indexOf(right);
+}
+
+function selectionClass(type, id) {
+  return state.selection.type === type && state.selection.id === id ? " active" : "";
+}
+
+function cardStateClass(key, links) {
+  if (links.active.has(key)) return " active";
+  if (links.connected.has(key)) return " connected";
+  if (links.faded.has(key)) return " faded";
+  return "";
+}
+
+function pill(text) {
+  return `<span class="pill">${escapeHtml(text)}</span>`;
+}
+
+function interactivePills(items, type, labelMap = null) {
+  if (!items?.length) {
+    return "<p>无</p>";
+  }
+
+  return `<div class="pill-list">${items
+    .map((item) => {
+      const mapped = labelMap?.get(item);
+      const label = mapped?.label || mapped?.name || String(item);
+      return `<button class="pill action-pill" type="button" data-select-type="${escapeHtml(type)}" data-select-id="${escapeHtml(
+        String(item)
+      )}">${escapeHtml(label)}</button>`;
+    })
+    .join("")}</div>`;
+}
+
+function interactiveTheoryPills(items) {
+  if (!items?.length) {
+    return "<p>无</p>";
+  }
+  return `<div class="pill-list">${items
+    .map((item) => {
+      const meta = DIMENSION_META[item] || { label: item, name: item };
+      return `<button class="pill action-pill" type="button" data-select-type="dimension" data-select-id="${escapeHtml(
+        item
+      )}">${escapeHtml(`${meta.label} ${meta.name}`)}</button>`;
+    })
+    .join("")}</div>`;
+}
+
+function listMarkup(items) {
+  if (!items?.length) {
+    return "<p>无</p>";
+  }
+  return items.map((item) => `<p>${escapeHtml(String(item))}</p>`).join("");
+}
+
+function objectMarkup(record) {
+  const entries = Object.entries(record || {});
+  if (!entries.length) {
+    return "<p>无</p>";
+  }
+  return entries
+    .map(
+      ([key, value]) => `
+        <p><strong>${escapeHtml(key)}</strong><br />${escapeHtml(String(value))}</p>
+      `
+    )
+    .join("");
+}
+
+function evidenceListMarkup(evidenceItems) {
+  if (!evidenceItems?.length) {
+    return "<p>无</p>";
+  }
+  return `<div class="evidence-stack">${evidenceItems
+    .map(
+      (evidence) => `
+        <button class="mini-card" type="button" data-select-type="evidence" data-select-id="${escapeHtml(evidence.id)}">
+          <strong>${escapeHtml(evidence.excerpt)}</strong>
+          <small>${escapeHtml(evidence.citation ? `[${evidence.citation}]` : "无引文标签")}</small>
+        </button>
+      `
+    )
+    .join("")}</div>`;
+}
+
+function phaseDimensionMarkup(phases, dimensionId) {
+  const texts = phases
+    .map((phase) => phase[dimensionId])
+    .filter(Boolean);
+  if (!texts.length) {
+    return "<p>无</p>";
+  }
+  return texts.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+}
+
+function relationMarkup(relations) {
+  if (!relations?.length) {
+    return "<p>无</p>";
+  }
+  return relations
+    .map(
+      (relation) => `
+        <p><strong>${escapeHtml(relation.source)} → ${escapeHtml(relation.target)}</strong><br />${escapeHtml(
+          relation.relationship || relation.description || ""
+        )}</p>
+      `
+    )
+    .join("");
+}
+
+function formatParadigm(paradigm) {
+  const blocks = [];
+  if (paradigm.conditions) {
+    blocks.push(`条件：${formatParadigmBlock(paradigm.conditions)}`);
+  }
+  if (paradigm.context) {
+    blocks.push(`情境：${formatParadigmBlock(paradigm.context)}`);
+  }
+  if (paradigm.actions) {
+    blocks.push(`行动/互动：${formatParadigmBlock(paradigm.actions)}`);
+  }
+  if (paradigm.consequences) {
+    blocks.push(`后果：${formatParadigmBlock(paradigm.consequences)}`);
+  }
+  return blocks.join("\n\n");
+}
+
+function formatParadigmBlock(block) {
+  if (!block) {
+    return "无";
+  }
+  if (typeof block === "string") {
+    return block;
+  }
+  return Object.entries(block)
+    .map(([key, value]) => `${key}：${Array.isArray(value) ? value.join("；") : value}`)
+    .join(" | ");
+}
+
+function dataArray(map, field, value) {
+  return Array.from(map.values()).filter((item) => item[field] === value);
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -959,23 +1616,23 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function parseAxialCodes(rawValue) {
-  if (!rawValue || typeof rawValue !== "string") {
-    return {};
-  }
-
-  try {
-    return JSON.parse(rawValue);
-  } catch (error) {
-    console.warn("Failed to parse final_output.axial_codes:", error);
-    return {};
-  }
+function isRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
 }
 
 async function readArtifact(file) {
+  if (/\.(docx|pdf|png|jpg|jpeg|gif|webp)$/i.test(file.name)) {
+    return `该文件为二进制文件，当前页面不直接解析预览：${file.name}`;
+  }
+
   const text = await file.text();
   if (file.name.endsWith(".json")) {
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      console.warn(`Failed to parse JSON for ${file.name}:`, error);
+      return text;
+    }
   }
   return text;
 }
@@ -983,14 +1640,4 @@ async function readArtifact(file) {
 function findArtifactLabel(run, targetFile) {
   const artifact = run.artifacts.find((item) => item.file === targetFile);
   return artifact?.label || null;
-}
-
-function syncAtomicUnitSelectionFromCurrentSelection() {
-  const data = state.currentData;
-  if (!data) return;
-
-  if (state.selection.type === "segment") {
-    const segment = data.segmentMap.get(state.selection.id);
-    state.activeAtomicUnitId = segment?.atomic_unit_ids?.[0] || state.activeAtomicUnitId;
-  }
 }

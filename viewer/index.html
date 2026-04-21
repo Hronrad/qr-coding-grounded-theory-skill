@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Grounded Theory Runs Viewer</title>
+    <title>Grounded Theory Native Run Viewer</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="page-shell">
       <aside class="sidebar">
         <div class="sidebar-header">
-          <p class="eyebrow">Runs Explorer</p>
+          <p class="eyebrow">Native Run Viewer</p>
           <h1>扎根理论运行可视化</h1>
           <p class="sidebar-copy">
-            浏览全部 run 目录、5 节点产物、三级编码递进关系与跨层跳转联系。
+            直接面向新版 run 结构，按“来源文件 → 证据摘录 → 子类属 → 轴心范畴 → 理论层”的真实对象浏览。
           </p>
         </div>
 
@@ -38,17 +38,18 @@
 
         <section class="sidebar-panel">
           <div class="panel-heading">
-            <h2>节点速览</h2>
+            <h2>原生摘要</h2>
           </div>
           <div id="node-summary" class="node-summary"></div>
         </section>
 
         <section class="sidebar-panel note-panel">
           <div class="panel-heading">
-            <h2>使用方式</h2>
+            <h2>当前模式</h2>
           </div>
           <p>
-            本页不依赖预生成索引。直接打开 HTML 后手动选择文件夹即可；后续新增 run 子目录时，重新选择一次文件夹即可刷新。
+            主界面优先使用 `node_c_axial_network.json`、`node_e_selective_coding.json`、
+            `open_codes_full.json`、`PROGRESS_REPORT.md` 与 `source/` 目录，不再以旧规范兼容层作为主数据源。
           </p>
         </section>
       </aside>
@@ -56,9 +57,11 @@
       <main class="main-content">
         <section class="hero">
           <div>
-            <p class="eyebrow">Audit-Friendly Workflow</p>
-            <h2 id="hero-title">加载中</h2>
-            <p id="hero-subtitle" class="hero-copy"></p>
+            <p class="eyebrow">Native Structure</p>
+            <h2 id="hero-title">等待导入</h2>
+            <p id="hero-subtitle" class="hero-copy">
+              选择本地 runs 文件夹后，这里会显示当前 run 的研究主题、模型说明与关键计数。
+            </p>
           </div>
           <div id="hero-metrics" class="hero-metrics"></div>
         </section>
@@ -66,45 +69,73 @@
         <section class="section-card">
           <div class="section-header">
             <div>
-              <p class="eyebrow">Encoding Ladder</p>
-              <h3>三级编码递进关系</h3>
+              <p class="eyebrow">Source Atlas</p>
+              <h3>来源文件总览</h3>
             </div>
             <p class="section-copy">
-              点击任一片段、开放编码、轴心类属或理论维度，页面会同步高亮相关层级并更新下方解释面板。
+              每份来源文件作为独立案例展示，直接显示开放编码文件、原始 docx、年级/状态、被引用次数与进入了哪些理论层级。
             </p>
           </div>
 
-          <div class="hierarchy-grid">
+          <div class="source-layout">
+            <div id="source-list" class="source-list"></div>
+            <div class="source-preview">
+              <div id="source-detail-title" class="artifact-title">请选择一个来源文件</div>
+              <div id="source-detail-content" class="source-detail"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-card">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Native Coding Ladder</p>
+              <h3>新 run 原生编码递进关系</h3>
+            </div>
+            <p class="section-copy">
+              点击任一来源案例、证据摘录、子类属、轴心范畴或理论层对象，页面会同步高亮真实关联，而不是兼容层拼接出的合成片段。
+            </p>
+          </div>
+
+          <div class="hierarchy-grid native-grid">
             <div class="hierarchy-column">
               <div class="column-header">
-                <span class="layer-tag">Node A</span>
-                <h4>切分片段</h4>
+                <span class="layer-tag">Corpus</span>
+                <h4>来源案例</h4>
               </div>
-              <div id="segments-column" class="column-list"></div>
+              <div id="sources-column" class="column-list"></div>
             </div>
 
             <div class="hierarchy-column">
               <div class="column-header">
-                <span class="layer-tag">Node B</span>
-                <h4>开放编码</h4>
+                <span class="layer-tag">Evidence</span>
+                <h4>证据摘录</h4>
               </div>
-              <div id="codes-column" class="column-list"></div>
+              <div id="evidence-column" class="column-list"></div>
             </div>
 
             <div class="hierarchy-column">
               <div class="column-header">
-                <span class="layer-tag">Node C</span>
-                <h4>轴心类属</h4>
+                <span class="layer-tag">Subcategory</span>
+                <h4>子类属</h4>
               </div>
-              <div id="categories-column" class="column-list"></div>
+              <div id="subcategory-column" class="column-list"></div>
             </div>
 
             <div class="hierarchy-column">
               <div class="column-header">
-                <span class="layer-tag">Node E + Framework</span>
-                <h4>选择编码</h4>
+                <span class="layer-tag">Axial</span>
+                <h4>轴心范畴</h4>
               </div>
-              <div id="selective-column" class="column-list"></div>
+              <div id="category-column" class="column-list"></div>
+            </div>
+
+            <div class="hierarchy-column">
+              <div class="column-header">
+                <span class="layer-tag">Selective</span>
+                <h4>理论层</h4>
+              </div>
+              <div id="theory-column" class="column-list"></div>
             </div>
           </div>
 
@@ -114,46 +145,30 @@
         <section class="section-card">
           <div class="section-header">
             <div>
-              <p class="eyebrow">Atomic Units</p>
-              <h3>原子单元列表</h3>
+              <p class="eyebrow">Theory Synthesis</p>
+              <h3>理论整合对象</h3>
             </div>
             <p class="section-copy">
-              展示 Node A 程序预切分生成的全部原子单元。点击任一原子单元可定位到所属片段，并查看其原文内容与跨度。
+              将维度、阶段、反馈回路与替代路径放在同一视图下，便于从选择编码结果回看轴心范畴和来源案例。
             </p>
           </div>
 
-          <div class="atomic-layout">
-            <div id="atomic-list" class="atomic-list"></div>
-            <div class="atomic-preview">
-              <div id="atomic-title" class="artifact-title">请选择一个原子单元</div>
-              <div id="atomic-content" class="atomic-content"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="section-card">
-          <div class="section-header">
-            <div>
-              <p class="eyebrow">Cross-Layer Links</p>
-              <h3>框架维度与跨层跳转</h3>
-            </div>
-            <p class="section-copy">
-              将选择编码结果、轴心类属、框架维度与关键备忘录放到同一界面中，便于追踪理论提升路径。
-            </p>
-          </div>
-
-          <div class="framework-layout">
+          <div class="framework-layout theory-grid">
             <div class="framework-panel">
-              <h4>框架维度</h4>
+              <h4>维度</h4>
               <div id="framework-dimensions" class="dimension-list"></div>
             </div>
             <div class="framework-panel">
-              <h4>跨类属关系</h4>
-              <div id="relations-list" class="relation-list"></div>
+              <h4>阶段</h4>
+              <div id="phase-list" class="dimension-list"></div>
             </div>
             <div class="framework-panel">
-              <h4>备忘录与竞争解释</h4>
-              <div id="memo-list" class="memo-list"></div>
+              <h4>反馈回路</h4>
+              <div id="loop-list" class="relation-list"></div>
+            </div>
+            <div class="framework-panel">
+              <h4>替代路径</h4>
+              <div id="pathway-list" class="memo-list"></div>
             </div>
           </div>
         </section>
@@ -165,7 +180,7 @@
               <h3>run 目录全量产物浏览</h3>
             </div>
             <p class="section-copy">
-              此处展示当前 run 下的全部发现文件，支持直接预览 JSON 和文本，便于审计 5 节点与最终输出。
+              保留对全部文件的直接浏览能力。JSON 会尽量结构化预览，Markdown 与文本会原样显示，二进制源文件仅显示说明。
             </p>
           </div>
 
