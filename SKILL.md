@@ -16,21 +16,40 @@ Use `scripts/prepare_hybrid_segments.py` and `scripts/validate_lossless_coverage
 ## Required Inputs
 
 - `interview_text` is required and should be treated as the primary evidence base.
-- `research_focus` is optional and should only guide the final selective-coding emphasis. It must not suppress unexpected but important concepts emerging from the data.
+- `analysis_method` is optional but recommended. Supported values are `grounded_theory` and `thematic_analysis`.
+  - If omitted, default to `grounded_theory`.
+  - If the user explicitly asks for thematic analysis, honor that request rather than forcing grounded theory.
+- `research_focus` is optional.
+  - Under `grounded_theory`, it should only guide the final selective-coding emphasis and must not suppress unexpected but important concepts emerging from the data.
+  - Under `thematic_analysis`, it may be used more directly to focus theme construction and reporting.
+- `user_framework` is optional and only applies when `analysis_method` is `thematic_analysis`.
+  - Under `grounded_theory`, a user-specified framework may be treated as a sensitizing concept at most, but it must not be imposed as the coding scaffold from the start.
+  - Under `thematic_analysis`, a user-specified framework may be used as the organizing lens for coding, theme grouping, and final interpretation.
 
 ## Execution Workflow
 
 1. Treat the source as a long-form qualitative corpus rather than as a passage to summarize.
-2. Prepare deterministic atomic units before semantic slicing. Use `scripts/prepare_hybrid_segments.py` to produce ordered atomic units with exact source spans and suggested LLM work batches.
-3. Let Node A perform semantic slicing on top of those atomic units rather than on raw text directly. Node A must preserve every atomic unit id and may only regroup adjacent units without dropping or rewriting source text.
-4. Persist every node output as a full intermediate artifact set. The runtime must retain and expose the atomic units, the full sliced corpus, the full open-coding corpus, the full axial-coding aggregation, the memo log, and the final selective-coding package.
-5. After Node A completes, run `scripts/validate_lossless_coverage.py` to verify that the ordered Node A slices reconstruct the original source text and that every atomic unit is used exactly once. If any unit is missing, duplicated, or altered, the workflow must fail rather than continue.
-6. Run open coding on every numbered slice. Each coded record must carry the original slice id, the atomic unit ids, the original text span, and the generated initial codes so the mapping remains lossless and auditable.
-7. After Node B completes, verify that every slice produced by Node A appears exactly once in the open-coding output. If any slice is absent, duplicated unexpectedly, or truncated, the workflow must fail rather than continue.
-8. Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
-9. Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
-10. Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
-11. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code was merged, split, or elevated.
+2. Determine the analytic path first:
+   - If `analysis_method = grounded_theory`, use the grounded-theory path below.
+   - If `analysis_method = thematic_analysis`, use the thematic-analysis path below.
+3. Prepare deterministic atomic units before semantic slicing. Use `scripts/prepare_hybrid_segments.py` to produce ordered atomic units with exact source spans and suggested LLM work batches.
+4. Let Node A perform semantic slicing on top of those atomic units rather than on raw text directly. Node A must preserve every atomic unit id and may only regroup adjacent units without dropping or rewriting source text.
+5. Persist every node output as a full intermediate artifact set. The runtime must retain and expose the atomic units, the full sliced corpus, the coding corpus, the axial or thematic aggregation, the memo log, and the final synthesis package.
+6. After Node A completes, run `scripts/validate_lossless_coverage.py` to verify that the ordered Node A slices reconstruct the original source text and that every atomic unit is used exactly once. If any unit is missing, duplicated, or altered, the workflow must fail rather than continue.
+7. Run slice-level coding on every numbered slice. Each coded record must carry the original slice id, the atomic unit ids, the original text span, and the generated code set so the mapping remains lossless and auditable.
+8. After Node B completes, verify that every slice produced by Node A appears exactly once in the coding output. If any slice is absent, duplicated unexpectedly, or truncated, the workflow must fail rather than continue.
+9. If `analysis_method = grounded_theory`:
+   - Run open coding first.
+   - Run axial coding next. Group dispersed codes into higher-order categories, explain relations among categories, and surface conditions, actions, interactions, and consequences.
+   - Run selective coding last. Identify one core category that best explains the full set of relationships, then narrate a coherent theoretical storyline around it.
+   - Use constant comparison throughout. Compare incidents with incidents, incidents with codes, and codes with categories.
+10. If `analysis_method = thematic_analysis`:
+   - Run initial coding first.
+   - Group codes into candidate themes and subthemes.
+   - Review and refine themes against the full corpus.
+   - Name and define themes clearly, then produce a thematic narrative.
+   - If the user provides a theoretical framework, that framework may be used as the organizing structure for themes, interpretation, and presentation.
+11. Keep brief analytic memos while coding. Note candidate mechanisms, ambiguities, rival explanations, and why a code, category, or theme was merged, split, or elevated.
 12. Return the final result in the structure defined by `{baseDir}/openclaw/output.schema.json`, including artifact locations and coverage reports.
 
 ## Source Provenance Contract
@@ -144,6 +163,19 @@ The final framework must be established through grounded-theory logic rather tha
 - The final framework must preserve rival explanations, boundary conditions, and partial or failed pathways. It must not flatten contradictory cases into one success narrative.
 - Representative cases, feedback loops, and policy/practice implications must all remain traceable to grounded categories and ultimately to source-level provenance.
 
+## Thematic Analysis Framework Rules
+
+Thematic analysis is a separate analytic mode and must not be mislabeled as grounded theory.
+
+- The workflow may use a user-specified theoretical framework, codebook, or sensitizing lens as the organizing scaffold when `analysis_method = thematic_analysis`.
+- Themes may be constructed deductively, inductively, or through a hybrid approach, but the run must state which strategy was used.
+- The final thematic structure should distinguish:
+  - coding units or coded excerpts
+  - candidate themes and subthemes
+  - the interpretive framework used for organizing those themes
+- If a user-specified framework is used, the output must say so explicitly rather than presenting the framework as though it emerged entirely from the data.
+- Thematic analysis outputs should still preserve provenance, negative or disconfirming material, and enough intermediate artifacts for auditability.
+
 ## Output Rules
 
 - `core_theory` must contain both the core category and a complete theory storyline written as a coherent explanation.
@@ -151,6 +183,9 @@ The final framework must be established through grounded-theory logic rather tha
 - `artifacts_root_dir` must point to the run directory where every node artifact is preserved and exposed.
 - `intermediate_artifacts` must enumerate the concrete artifact files produced by each node so the caller can inspect the full trail.
 - `coverage_report` must summarize the coverage checks for Node A and Node B and must explicitly report failure if any original text span was lost.
+- The output must explicitly state which method was used: `grounded_theory` or `thematic_analysis`.
+- If `grounded_theory` is used, the final framework must be described as having been built through open coding, axial coding, and selective coding rather than as a preloaded template.
+- If `thematic_analysis` is used and the user has specified a framework, the output may organize themes with that framework, but it must clearly mark the framework as user-specified or externally supplied.
 - If the source text is too short, fragmented, or missing, say that grounded-theory coding cannot be completed reliably and explain the limitation.
 
 ## Script Resources
