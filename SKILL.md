@@ -1,10 +1,10 @@
 ---
-name: qr-coding-grounded-theory-skill
-description: 专用于处理长篇访谈文本的质性分析工具。通过扎根理论三级编码，自动提炼核心范畴与理论结构。当用户提供长文本并要求进行深度质性分析、提炼主题或理论建模时触发调用。
-metadata: {"openclaw":{"display_name":"QR-coding-grounded-theory-skill","manifest":"./openclaw/manifest.json","input_schema":"./openclaw/input.schema.json","output_schema":"./openclaw/output.schema.json","workflow_binding":"./openclaw/workflow.binding.json"}}
+name: qualitative-research-coding-skill
+description: 面向访谈、观察与田野材料的质性研究编码技能。支持扎根理论与主题分析法，保留中间产物、跨层溯源与可视化浏览，适合长文本的深度质性分析、主题提炼与理论建模。
+metadata: {"openclaw":{"display_name":"qualitative-research-coding-skill","manifest":"./openclaw/manifest.json","input_schema":"./openclaw/input.schema.json","output_schema":"./openclaw/output.schema.json","workflow_binding":"./openclaw/workflow.binding.json"}}
 ---
 
-# QR Coding Grounded Theory Skill
+# Qualitative Research Coding Skill
 
 ## Overview
 

@@ -1,7 +1,7 @@
 {
-  "name": "qr_coding_grounded_theory_skill",
-  "display_name": "QR-coding-grounded-theory-skill",
-  "description": "专用于处理长篇访谈文本的质性分析工具。通过扎根理论三级编码，自动提炼核心范畴与理论结构。当用户提供长文本并要求进行深度质性分析、提炼主题或理论建模时触发调用。",
+  "name": "qualitative_research_coding_skill",
+  "display_name": "qualitative-research-coding-skill",
+  "description": "面向访谈、观察与田野材料的质性研究编码技能。支持扎根理论与主题分析法，并保留完整中间产物与可视化溯源能力。",
   "version": "1.0.0",
   "engine": {
     "type": "workflow_binding",

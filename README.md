@@ -1,6 +1,8 @@
-# QR Coding Grounded Theory Skill
+# Qualitative Research Coding Skill
 
-This project packages a grounded-theory skill for long-form qualitative analysis, plus local tooling for hybrid segmentation, strict coverage validation, run artifact inspection, and browser-based visualization.
+This project packages a qualitative-research coding skill for long-form analysis, plus local tooling for hybrid segmentation, strict coverage validation, run artifact inspection, and browser-based visualization.
+
+简短说明：该项目用于对访谈、观察、田野笔记等质性材料进行编码分析，支持扎根理论与主题分析法，能够保留完整中间产物、校验文本覆盖，并通过网页查看跨层级编码关系与运行结果。
 
 ## What It Contains
 
@@ -57,7 +59,7 @@ Usage:
 2. Click the folder picker.
 3. Select either:
    - the `runs` directory, or
-   - the whole `qr-coding-grounded-theory-skill` directory
+   - the whole `qualitative-research-coding-skill` directory
 4. Browse the imported runs, node artifacts, atomic units, and three-level coding relationships.
 
 The viewer does not require a generated manifest or local web server for basic use.

@@ -24,7 +24,7 @@
           <button id="pick-folder-button" class="primary-button">选择 runs 文件夹</button>
           <input id="folder-input" class="hidden-input" type="file" webkitdirectory directory multiple />
           <p id="import-status" class="sidebar-copy compact-copy">
-            直接打开本页后，选择 `runs` 文件夹，或选择整个 `qr-coding-grounded-theory-skill` 文件夹也可以。
+            直接打开本页后，选择 `runs` 文件夹，或选择整个 `qualitative-research-coding-skill` 文件夹也可以。
           </p>
         </section>
 
@@ -48,8 +48,9 @@
             <h2>当前模式</h2>
           </div>
           <p>
-            主界面优先使用 `node_c_axial_network.json`、`node_e_selective_coding.json`、
-            `open_codes_full.json`、`PROGRESS_REPORT.md` 与 `source/` 目录，不再以旧规范兼容层作为主数据源。
+            主界面会优先识别新版原生结构；既支持 `node_c_axial_network.json` / `node_e_selective_coding.json`
+            的扎根理论 run，也支持 `node_c/thematic_groups.json` / `node_e/final_thematic_report.json`
+            的主题分析 run，并统一映射到同一套关系浏览界面。
           </p>
         </section>
       </aside>

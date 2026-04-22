@@ -1,9 +1,12 @@
 const KNOWN_FILE_CANDIDATES = {
   progress_report: ["PROGRESS_REPORT.md"],
   final_report: ["FINAL_REPORT.md"],
+  source_manifest: ["source/source_manifest.json"],
+  slices: ["node_a/slices.json"],
+  extracted_codes: ["node_b/extracted_codes.json"],
   open_codes_summary: ["node_b/open_codes_full.json"],
-  axial_network_native: ["node_c_axial_network.json"],
-  selective_native: ["node_e_selective_coding.json"],
+  axial_network_native: ["node_c_axial_network.json", "node_c/thematic_groups.json"],
+  selective_native: ["node_e_selective_coding.json", "node_e/final_thematic_report.json"],
   memo_aggregation: ["node_d/memo_aggregation.json"],
 };
 
@@ -209,14 +212,49 @@ async function loadRunArtifacts(run) {
 
   const progressReport = typeof fileData.progress_report === "string" ? fileData.progress_report : "";
   const finalReport = typeof fileData.final_report === "string" ? fileData.final_report : "";
+  const sourceManifest = isRecord(fileData.source_manifest) ? fileData.source_manifest : {};
+  const slices = Array.isArray(fileData.slices) ? fileData.slices : [];
+  const extractedCodes = isRecord(fileData.extracted_codes) ? fileData.extracted_codes : {};
   const openSummary = isRecord(fileData.open_codes_summary) ? fileData.open_codes_summary : {};
   const axial = isRecord(fileData.axial_network_native) ? fileData.axial_network_native : {};
   const selective = isRecord(fileData.selective_native) ? fileData.selective_native : {};
+  const memo = isRecord(fileData.memo_aggregation) ? fileData.memo_aggregation : {};
 
   const progressIndex = parseProgressReport(progressReport);
   const sourceDocArtifacts = (run.artifacts || []).filter(
     (artifact) => artifact.label.startsWith("source/") && /\.(docx|txt)$/i.test(artifact.label)
   );
+
+  if (isThematicRunShape({ axial, selective, extractedCodes, openSummary })) {
+    const thematic = buildThematicCodingObjects({
+      run,
+      sourceManifest,
+      openSummary,
+      axial,
+      selective,
+      memo,
+      slices,
+      extractedCodes,
+      sourceDocArtifacts,
+    });
+
+    return {
+      run,
+      files: run.files,
+      artifacts: run.artifacts,
+      progressReport,
+      finalReport,
+      sourceManifest,
+      slices,
+      extractedCodes,
+      openSummary,
+      axial,
+      selective,
+      memo,
+      progressIndex,
+      ...thematic,
+    };
+  }
 
   const sources = buildSourceEntries(openSummary, sourceDocArtifacts, progressIndex);
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
@@ -347,10 +385,222 @@ async function loadRunArtifacts(run) {
     artifacts: run.artifacts,
     progressReport,
     finalReport,
+    sourceManifest,
+    slices,
+    extractedCodes,
     openSummary,
     axial,
     selective,
+    memo,
     progressIndex,
+    sources,
+    sourceMap,
+    evidenceItems,
+    evidenceMap,
+    subcategoryEntries,
+    subcategoryMap,
+    categoryEntries,
+    categoryMap,
+    dimensions,
+    dimensionMap,
+    phases,
+    phaseMap,
+    loops,
+    loopMap,
+    pathways,
+    pathwayMap,
+    core,
+    relations,
+  };
+}
+
+function isThematicRunShape({ axial, selective, extractedCodes, openSummary }) {
+  return (
+    isRecord(axial?.thematic_groups) &&
+    Array.isArray(extractedCodes?.codes) &&
+    Array.isArray(openSummary?.evidence) &&
+    isRecord(selective)
+  );
+}
+
+function buildThematicCodingObjects({
+  run,
+  sourceManifest,
+  openSummary,
+  axial,
+  selective,
+  memo,
+  slices,
+  extractedCodes,
+  sourceDocArtifacts,
+}) {
+  const sources = buildSourceEntriesFromManifest(sourceManifest, sourceDocArtifacts, openSummary);
+  const sourceMap = new Map(sources.map((source) => [source.id, source]));
+
+  const codeEntries = Array.isArray(extractedCodes.codes) ? extractedCodes.codes : [];
+  const codeMap = new Map(codeEntries.map((entry) => [entry.code_id, entry]));
+  const rawSliceEvidence = Array.isArray(openSummary.evidence) ? openSummary.evidence : [];
+  const sliceIndex = buildSliceEvidenceIndex(rawSliceEvidence);
+
+  const evidenceItems = [];
+  const evidenceMap = new Map();
+  const subcategoryEntries = [];
+  const subcategoryMap = new Map();
+  const categoryEntries = [];
+  const categoryMap = new Map();
+  const relations = buildThematicRelations(selective);
+
+  Object.entries(axial.thematic_groups || {}).forEach(([groupKey, group]) => {
+    const dimensionId = normalizeDimensionId(groupKey);
+    const categorySourceIds = new Set();
+
+    (group.themes || []).forEach((theme) => {
+      const categoryEntry = {
+        id: theme.theme_id,
+        name: theme.name || theme.theme_id,
+        dimensionId,
+        description: theme.description || group.group_description || "",
+        subcategoryIds: [],
+        evidenceIds: [],
+        sourceIds: [],
+        relations: relations.filter(
+          (relation) => relation.source === theme.theme_id || relation.target === theme.theme_id
+        ),
+      };
+
+      const subthemes = Array.isArray(theme.sub_themes) && theme.sub_themes.length
+        ? theme.sub_themes
+        : [{ id: `${theme.theme_id}.0`, name: `${theme.name || theme.theme_id} 证据簇` }];
+
+      const subEntryMap = new Map();
+      const subSourceMap = new Map();
+      const themeEvidenceIds = [];
+
+      (theme.evidence_refs || []).forEach((ref, evidenceIndex) => {
+        const codeEntry = codeMap.get(ref.code_id);
+        const matchedSlice = matchSliceEvidenceRef(ref, codeEntry, sliceIndex);
+        const sourceId = ref.source_file_id || codeEntry?.source_file_id || matchedSlice?.source_file_id || "";
+        const primaryRawTheme =
+          pickPrimaryRawTheme(matchedSlice?.raw_themes || matchedSlice?.codes || [], dimensionId) ||
+          subthemes[0]?.name ||
+          theme.name ||
+          theme.theme_id;
+        const subcategoryId = `${theme.theme_id}::${primaryRawTheme}`;
+
+        if (!subEntryMap.has(subcategoryId)) {
+          const subEntry = {
+            id: subcategoryId,
+            name: primaryRawTheme,
+            categoryId: theme.theme_id,
+            dimensionId,
+            phenomenon: group.group_description || theme.description || "",
+            paradigm: {
+              theme_id: theme.theme_id,
+              theme_name: theme.name || theme.theme_id,
+              declared_subthemes: subthemes.map((item) => item.name || item.id).filter(Boolean),
+              evidence_strategy: "thematic_analysis_primary_raw_theme",
+            },
+            evidenceIds: [],
+            sourceIds: [],
+          };
+          subEntryMap.set(subcategoryId, subEntry);
+          subSourceMap.set(subcategoryId, new Set());
+          subcategoryEntries.push(subEntry);
+          subcategoryMap.set(subcategoryId, subEntry);
+          categoryEntry.subcategoryIds.push(subcategoryId);
+        }
+        const evidenceId = `${theme.theme_id}::${ref.code_id || String(evidenceIndex + 1).padStart(3, "0")}`;
+        const citationParts = [ref.source_file_id || "", ref.code_id || ""].filter(Boolean);
+
+        const evidence = {
+          id: evidenceId,
+          raw: buildThematicEvidenceRaw(ref, codeEntry, matchedSlice),
+          excerpt: ref.evidence || codeEntry?.evidence || matchedSlice?.quote_excerpt || "无摘录",
+          citation: citationParts.join(" / "),
+          sourceId: sourceId || null,
+          subcategoryId,
+          categoryId: theme.theme_id,
+          dimensionId,
+        };
+
+        evidenceItems.push(evidence);
+        evidenceMap.set(evidenceId, evidence);
+        themeEvidenceIds.push(evidenceId);
+        categoryEntry.evidenceIds.push(evidenceId);
+
+        if (subcategoryId && subEntryMap.has(subcategoryId)) {
+          const subEntry = subEntryMap.get(subcategoryId);
+          subEntry.evidenceIds.push(evidenceId);
+          if (sourceId) {
+            subSourceMap.get(subcategoryId)?.add(sourceId);
+          }
+        }
+
+        if (sourceId && sourceMap.has(sourceId)) {
+          categorySourceIds.add(sourceId);
+          const source = sourceMap.get(sourceId);
+          source.evidenceIds.add(evidenceId);
+          source.categoryIds.add(theme.theme_id);
+          source.dimensionIds.add(dimensionId);
+          if (subcategoryId) {
+            source.subcategoryIds.add(subcategoryId);
+          }
+        }
+      });
+
+      subEntryMap.forEach((subEntry, subId) => {
+        subEntry.sourceIds = Array.from(subSourceMap.get(subId) || []).sort(compareNatural);
+      });
+
+      categoryEntry.evidenceIds = themeEvidenceIds;
+      categoryEntry.sourceIds = Array.from(categorySourceIds).sort(compareNatural);
+      categoryEntries.push(categoryEntry);
+      categoryMap.set(categoryEntry.id, categoryEntry);
+    });
+  });
+
+  sources.forEach((source) => {
+    source.evidenceIds = Array.from(source.evidenceIds).sort(compareNatural);
+    source.subcategoryIds = Array.from(source.subcategoryIds).sort(compareNatural);
+    source.categoryIds = Array.from(source.categoryIds).sort(compareNatural);
+    source.dimensionIds = Array.from(source.dimensionIds).sort(orderDimensionIds);
+    source.pathwayIds = Array.from(source.pathwayIds).sort(compareNatural);
+  });
+
+  subcategoryEntries.forEach((entry) => {
+    entry.evidenceIds.sort(compareNatural);
+    entry.sourceIds.sort(compareNatural);
+  });
+
+  evidenceItems.sort((a, b) => {
+    const sourceA = a.sourceId ? sourceMap.get(a.sourceId)?.sequence ?? 999 : 999;
+    const sourceB = b.sourceId ? sourceMap.get(b.sourceId)?.sequence ?? 999 : 999;
+    if (sourceA !== sourceB) {
+      return sourceA - sourceB;
+    }
+    return a.id.localeCompare(b.id, "zh-Hans-CN");
+  });
+
+  subcategoryEntries.sort((a, b) => a.id.localeCompare(b.id, "zh-Hans-CN"));
+  categoryEntries.sort((a, b) => a.id.localeCompare(b.id, "zh-Hans-CN"));
+  sources.sort((a, b) => {
+    if (a.sequence !== b.sequence) {
+      return a.sequence - b.sequence;
+    }
+    return a.label.localeCompare(b.label, "zh-Hans-CN");
+  });
+
+  const dimensions = buildThematicDimensionEntries(sourceManifest, axial, categoryEntries, sourceMap, evidenceMap);
+  const dimensionMap = new Map(dimensions.map((dimension) => [dimension.id, dimension]));
+  const phases = buildThematicPhaseEntries(selective);
+  const phaseMap = new Map(phases.map((phase) => [phase.id, phase]));
+  const loops = buildThematicLoopEntries(selective, categoryMap);
+  const loopMap = new Map(loops.map((loop) => [loop.id, loop]));
+  const pathways = buildThematicPathwayEntries(memo, sources);
+  const pathwayMap = new Map(pathways.map((pathway) => [pathway.id, pathway]));
+  const core = buildThematicCoreEntry(selective, memo, dimensions, phases, loops, pathways, run, sourceManifest);
+
+  return {
     sources,
     sourceMap,
     evidenceItems,
@@ -391,9 +641,14 @@ function renderRunList() {
 function renderHero() {
   const data = state.currentData;
   document.getElementById("hero-title").textContent =
-    data.selective.metadata?.research_topic || data.axial.metadata?.research_topic || data.run.label;
+    data.selective.metadata?.research_topic ||
+    data.sourceManifest?.research_topic ||
+    data.axial.metadata?.research_topic ||
+    data.run.label;
   document.getElementById("hero-subtitle").textContent =
     data.selective.integrated_model?.description ||
+    data.selective.core_themes?.summary ||
+    data.memo?.cross_dimension_integration ||
     data.selective.theoretical_storyline?.summary ||
     "当前 run 已加载，可浏览来源案例、证据摘录、轴心范畴与理论层对象。";
 
@@ -494,10 +749,10 @@ function renderSourceAtlas() {
     <div class="detail-card">
       <h5>进入理论链路</h5>
       <div class="meta-row">
-        ${interactivePills(focusedSource.subcategoryIds, "subcategory")}
+        ${interactivePills(focusedSource.subcategoryIds, "subcategory", data.subcategoryMap)}
       </div>
       <div class="meta-row">
-        ${interactivePills(focusedSource.categoryIds, "category")}
+        ${interactivePills(focusedSource.categoryIds, "category", data.categoryMap)}
       </div>
       <div class="meta-row">
         ${interactiveTheoryPills(focusedSource.dimensionIds)}
@@ -662,7 +917,11 @@ function renderSelectionPanel() {
   const selection = state.selection || { type: "core", id: "core" };
 
   let title = data.core.name || "核心范畴";
-  let body = data.selective.theoretical_storyline?.detailed_narrative || data.core.description || "";
+  let body =
+    data.selective.theoretical_storyline?.detailed_narrative ||
+    data.memo?.cross_dimension_integration ||
+    data.core.description ||
+    "";
   let rightColumn = [
     detailCard("促进条件", listMarkup(data.core.facilitating)),
     detailCard("限制条件", listMarkup(data.core.constraining)),
@@ -685,8 +944,8 @@ function renderSelectionPanel() {
 
     rightColumn = [
       detailCard("证据摘录", evidenceListMarkup(source.evidenceIds.map((id) => data.evidenceMap.get(id)).filter(Boolean))),
-      detailCard("进入的子类属", interactivePills(source.subcategoryIds, "subcategory")),
-      detailCard("进入的轴心范畴", interactivePills(source.categoryIds, "category")),
+      detailCard("进入的子类属", interactivePills(source.subcategoryIds, "subcategory", data.subcategoryMap)),
+      detailCard("进入的轴心范畴", interactivePills(source.categoryIds, "category", data.categoryMap)),
       detailCard("进入的理论维度", interactiveTheoryPills(source.dimensionIds)),
     ];
   } else if (selection.type === "evidence") {
@@ -698,8 +957,8 @@ function renderSelectionPanel() {
         "来源案例",
         evidence.sourceId ? interactivePills([evidence.sourceId], "source", data.sourceMap) : "<p>未匹配来源。</p>"
       ),
-      detailCard("子类属", interactivePills([evidence.subcategoryId], "subcategory")),
-      detailCard("轴心范畴", interactivePills([evidence.categoryId], "category")),
+      detailCard("子类属", interactivePills([evidence.subcategoryId], "subcategory", data.subcategoryMap)),
+      detailCard("轴心范畴", interactivePills([evidence.categoryId], "category", data.categoryMap)),
       detailCard("理论维度", interactiveTheoryPills([evidence.dimensionId])),
     ];
   } else if (selection.type === "subcategory") {
@@ -713,7 +972,7 @@ function renderSelectionPanel() {
       .join("\n\n");
 
     rightColumn = [
-      detailCard("所属轴心范畴", interactivePills([subcategory.categoryId], "category")),
+      detailCard("所属轴心范畴", interactivePills([subcategory.categoryId], "category", data.categoryMap)),
       detailCard("来源案例", interactivePills(subcategory.sourceIds, "source", data.sourceMap)),
       detailCard(
         "证据摘录",
@@ -725,7 +984,7 @@ function renderSelectionPanel() {
     title = `${category.id} ${category.name}`;
     body = category.description || "无额外说明";
     rightColumn = [
-      detailCard("子类属", interactivePills(category.subcategoryIds, "subcategory")),
+      detailCard("子类属", interactivePills(category.subcategoryIds, "subcategory", data.subcategoryMap)),
       detailCard("来源案例", interactivePills(category.sourceIds, "source", data.sourceMap)),
       detailCard("理论维度", interactiveTheoryPills([category.dimensionId])),
       detailCard("跨范畴关系", relationMarkup(category.relations)),
@@ -735,7 +994,7 @@ function renderSelectionPanel() {
     title = `${dimension.id} ${dimension.name}`;
     body = dimension.definition || "无额外定义。";
     rightColumn = [
-      detailCard("轴心范畴", interactivePills(dimension.categoryIds, "category")),
+      detailCard("轴心范畴", interactivePills(dimension.categoryIds, "category", data.categoryMap)),
       detailCard("来源案例", interactivePills(dimension.sourceIds, "source", data.sourceMap)),
       detailCard("阶段叙述", phaseDimensionMarkup(data.phases, dimension.id)),
     ];
@@ -759,7 +1018,7 @@ function renderSelectionPanel() {
     body = loop.description || "";
     rightColumn = [
       detailCard("方向", `<p>${escapeHtml(loop.direction || "未标注")}</p>`),
-      detailCard("涉及范畴", interactivePills(loop.categoryIds, "category")),
+      detailCard("涉及范畴", interactivePills(loop.categoryIds, "category", data.categoryMap)),
       detailCard("涉及维度", interactiveTheoryPills(loop.dimensionIds)),
     ];
   } else if (selection.type === "pathway") {
@@ -1137,6 +1396,314 @@ function buildSourceEntries(openSummary, sourceDocArtifacts, progressIndex) {
   });
 }
 
+function buildSourceEntriesFromManifest(sourceManifest, sourceDocArtifacts, openSummary) {
+  const docxPaths = sourceDocArtifacts.map((artifact) => artifact.label);
+  const openSourceFiles = Array.isArray(openSummary.source_files) ? openSummary.source_files : [];
+
+  return (sourceManifest.source_files || []).map((sourceFile, index) => {
+    const baseLabel = sourceFile.source_file_label || sourceFile.source_file_id || `source-${index + 1}`;
+    const declaredPath = sourceFile.raw_source_path ? `source/${sourceFile.raw_source_path}` : "";
+    const docxFile =
+      docxPaths.find((path) => path.endsWith(sourceFile.raw_source_path || "")) ||
+      bestDocxMatch(declaredPath || baseLabel, docxPaths);
+    const openCodingFile =
+      openSourceFiles.find((filename) => stripOpenCodingSuffix(filename) === baseLabel) ||
+      `${baseLabel}_开放编码.md`;
+
+    return {
+      id: sourceFile.source_file_id || baseLabel,
+      sequence: index + 1,
+      label: baseLabel,
+      openCodingFile,
+      docxFile,
+      group: sourceFile.plan || inferGroup(baseLabel),
+      year: sourceFile.year || inferYear(baseLabel),
+      status: sourceFile.status || inferStatus(baseLabel),
+      lineCount: null,
+      searchText: [
+        sourceFile.source_file_id || "",
+        baseLabel,
+        sourceFile.raw_source_path || "",
+        openCodingFile,
+        docxFile || "",
+      ].join(" "),
+      tokens: extractSearchTokens(
+        [
+          sourceFile.source_file_id || "",
+          baseLabel,
+          sourceFile.raw_source_path || "",
+          openCodingFile,
+          docxFile || "",
+        ].join(" ")
+      ),
+      evidenceIds: new Set(),
+      subcategoryIds: new Set(),
+      categoryIds: new Set(),
+      dimensionIds: new Set(),
+      pathwayIds: new Set(),
+    };
+  });
+}
+
+function buildSliceEvidenceIndex(evidenceItems) {
+  const bySource = new Map();
+
+  evidenceItems.forEach((item) => {
+    const sourceId = item.source_file_id || "";
+    if (!bySource.has(sourceId)) {
+      bySource.set(sourceId, []);
+    }
+    bySource.get(sourceId).push({
+      ...item,
+      normalizedQuote: normalizeEvidenceText(item.quote_excerpt || ""),
+    });
+  });
+
+  return bySource;
+}
+
+function matchSliceEvidenceRef(ref, codeEntry, sliceIndex) {
+  const sourceId = ref.source_file_id || codeEntry?.source_file_id || "";
+  const candidates = sliceIndex.get(sourceId) || [];
+  const query = normalizeEvidenceText(ref.evidence || codeEntry?.evidence || "");
+  if (!query) {
+    return null;
+  }
+
+  let best = null;
+  let bestScore = 0;
+
+  candidates.forEach((candidate) => {
+    const quote = candidate.normalizedQuote;
+    if (!quote) {
+      return;
+    }
+
+    let score = 0;
+    if (quote === query) {
+      score += 120;
+    }
+    if (quote.includes(query)) {
+      score += 90 - Math.min(40, quote.length - query.length);
+    }
+    if (query.includes(quote)) {
+      score += 30;
+    }
+
+    const queryTokens = extractSearchTokens(query);
+    queryTokens.forEach((token) => {
+      if (quote.includes(token)) {
+        score += Math.min(8, token.length + 1);
+      }
+    });
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  });
+
+  return bestScore > 0 ? best : null;
+}
+
+function normalizeEvidenceText(text) {
+  return String(text || "")
+    .replace(/\s+/g, "")
+    .replace(/[，。、“”‘’；：？！,.!?\-—_()（）【】\[\]<>《》]/g, "")
+    .toLowerCase();
+}
+
+function pickPrimaryRawTheme(rawThemes, dimensionId) {
+  const items = (rawThemes || []).map((item) => String(item).trim()).filter(Boolean);
+  const preferred = items.find((item) => item.startsWith(`${dimensionId}_`));
+  return preferred || items[0] || "";
+}
+
+function buildThematicEvidenceRaw(ref, codeEntry, matchedSlice) {
+  return [
+    `code_id: ${ref.code_id || codeEntry?.code_id || "未标注"}`,
+    `source_file_id: ${ref.source_file_id || codeEntry?.source_file_id || matchedSlice?.source_file_id || "未标注"}`,
+    `source_file_label: ${ref.source_file_label || codeEntry?.source_file_label || matchedSlice?.source_file_label || "未标注"}`,
+    `evidence: ${ref.evidence || codeEntry?.evidence || "无"}`,
+    matchedSlice?.slice_id ? `slice_id: ${matchedSlice.slice_id}` : "",
+    matchedSlice?.quote_excerpt ? `matched_slice: ${matchedSlice.quote_excerpt}` : "",
+    matchedSlice?.raw_themes?.length ? `raw_themes: ${matchedSlice.raw_themes.join("；")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildThematicRelations(selective) {
+  return (selective.axial_codes?.cross_dimensions || []).map((relation, index) => ({
+    id: `rel-${index + 1}`,
+    source: relation.from,
+    target: relation.to,
+    relationship: relation.type || "",
+    description: relation.description || "",
+  }));
+}
+
+function buildThematicDimensionEntries(sourceManifest, axial, categoryEntries, sourceMap, evidenceMap) {
+  const manifestDimensions = sourceManifest.user_framework?.dimensions || {};
+
+  return Object.entries(axial.thematic_groups || {})
+    .map(([groupKey, group]) => {
+      const id = normalizeDimensionId(groupKey);
+      const manifestMeta = manifestDimensions[id] || {};
+      const categoryIds = categoryEntries
+        .filter((entry) => entry.dimensionId === id)
+        .map((entry) => entry.id);
+      const evidenceIds = categoryIds.flatMap((categoryId) =>
+        categoryEntries.find((entry) => entry.id === categoryId)?.evidenceIds || []
+      );
+      const sourceIds = Array.from(
+        new Set(
+          evidenceIds
+            .map((evidenceId) => evidenceMap.get(evidenceId)?.sourceId)
+            .filter(Boolean)
+        )
+      ).sort(compareNatural);
+
+      return {
+        id,
+        name: manifestMeta.name || group.group_name || DIMENSION_META[id]?.name || id,
+        definition:
+          manifestMeta.description || group.group_description || DIMENSION_META[id]?.name || "",
+        categoryIds,
+        subcategoryIds: [],
+        evidenceIds,
+        sourceIds,
+      };
+    })
+    .sort((a, b) => orderDimensionIds(a.id, b.id));
+}
+
+function buildThematicPhaseEntries(selective) {
+  return Object.entries(selective.transition_mechanism || {})
+    .map(([phaseKey, phase], index) => {
+      const indicators = phase.indicators || phase.key_triggers || [];
+      return {
+        id: `phase-${index + 1}`,
+        name: phase.name || phaseKey,
+        timeframe: "",
+        phaseNumber: index + 1,
+        L: indicators.filter((item) => String(item).startsWith("L")).join("；"),
+        I: indicators.filter((item) => String(item).startsWith("I")).join("；"),
+        V: indicators.filter((item) => String(item).startsWith("V")).join("；"),
+        keyEvents: phase.key_triggers || phase.indicators || [],
+        typicalStudents: [],
+      };
+    })
+    .sort((a, b) => a.phaseNumber - b.phaseNumber);
+}
+
+function buildThematicLoopEntries(selective, categoryMap) {
+  return (selective.axial_codes?.cross_dimensions || []).map((loop, index) => {
+    const categoryIds = [loop.from, loop.to].filter((id) => categoryMap.has(id));
+    const dimensionIds = Array.from(
+      new Set(categoryIds.map((id) => categoryMap.get(id)?.dimensionId).filter(Boolean))
+    ).sort(orderDimensionIds);
+    const sourceIds = Array.from(
+      new Set(
+        categoryIds.flatMap((id) => categoryMap.get(id)?.sourceIds || [])
+      )
+    ).sort(compareNatural);
+
+    return {
+      id: `loop-${index + 1}`,
+      name: `${loop.from} → ${loop.to}`,
+      description: loop.description || "",
+      direction: loop.type || "",
+      categoryIds,
+      dimensionIds,
+      sourceIds,
+    };
+  });
+}
+
+function buildThematicPathwayEntries(memo, sources) {
+  const pathways = [];
+
+  if (memo.transfer_vs_exit_comparison?.transfer_patterns) {
+    const sourceIds = sources.filter((source) => source.status === "转段").map((source) => source.id);
+    sourceIds.forEach((sourceId) => {
+      const source = sources.find((entry) => entry.id === sourceId);
+      if (!source) {
+        return;
+      }
+      if (source.pathwayIds instanceof Set) {
+        source.pathwayIds.add("transfer");
+      } else if (Array.isArray(source.pathwayIds) && !source.pathwayIds.includes("transfer")) {
+        source.pathwayIds.push("transfer");
+      }
+    });
+    pathways.push({
+      id: "transfer",
+      name: "转段路径",
+      description: memo.transfer_vs_exit_comparison.transfer_patterns,
+      indicators: [],
+      representativeCases: sourceIds.map((id) => sources.find((source) => source.id === id)?.label).filter(Boolean),
+      sourceIds,
+    });
+  }
+
+  if (memo.transfer_vs_exit_comparison?.exit_patterns) {
+    const sourceIds = sources.filter((source) => source.status === "退出").map((source) => source.id);
+    sourceIds.forEach((sourceId) => {
+      const source = sources.find((entry) => entry.id === sourceId);
+      if (!source) {
+        return;
+      }
+      if (source.pathwayIds instanceof Set) {
+        source.pathwayIds.add("exit");
+      } else if (Array.isArray(source.pathwayIds) && !source.pathwayIds.includes("exit")) {
+        source.pathwayIds.push("exit");
+      }
+    });
+    pathways.push({
+      id: "exit",
+      name: "退出路径",
+      description: memo.transfer_vs_exit_comparison.exit_patterns,
+      indicators: [],
+      representativeCases: sourceIds.map((id) => sources.find((source) => source.id === id)?.label).filter(Boolean),
+      sourceIds,
+    });
+  }
+
+  return pathways;
+}
+
+function buildThematicCoreEntry(selective, memo, dimensions, phases, loops, pathways, run, sourceManifest) {
+  return {
+    name: sourceManifest.research_topic || run.label || "主题分析综合框架",
+    description:
+      selective.core_themes?.summary ||
+      memo.cross_dimension_integration ||
+      "当前 run 使用主题分析结构，已归一化接入通用 viewer。",
+    facilitating: memo.mechanisms?.facilitating_conditions
+      ? splitLongTextToList(memo.mechanisms.facilitating_conditions)
+      : [],
+    constraining: memo.mechanisms?.constraining_conditions
+      ? splitLongTextToList(memo.mechanisms.constraining_conditions)
+      : [],
+    consequences: {
+      key_findings: Array.isArray(selective.key_findings) ? selective.key_findings.join("；") : "",
+      coverage_summary: selective.coverage_report?.coverage_summary || "",
+    },
+    dimensionIds: dimensions.map((dimension) => dimension.id),
+    phaseIds: phases.map((phase) => phase.id),
+    loopIds: loops.map((loop) => loop.id),
+    pathwayIds: pathways.map((pathway) => pathway.id),
+  };
+}
+
+function splitLongTextToList(text) {
+  return String(text || "")
+    .split(/\d+\)\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function buildDimensionEntries(selective, axial, categoryEntries, sourceMap, subcategoryMap, evidenceMap) {
   const rawFramework =
     selective.metadata?.theoretical_framework || axial.metadata?.theoretical_framework || {};
@@ -1413,8 +1980,18 @@ function bestDocxMatch(label, docxPaths) {
 
 function normalizeDimensionId(rawId) {
   const upper = String(rawId || "").trim().toUpperCase();
-  if (upper === "L" || upper === "I" || upper === "V") {
-    return upper;
+  if (
+    upper === "L" ||
+    upper === "I" ||
+    upper === "V" ||
+    upper.startsWith("L_") ||
+    upper.startsWith("I_") ||
+    upper.startsWith("V_")
+  ) {
+    return upper.charAt(0);
+  }
+  if (upper === "C" || upper.startsWith("C_")) {
+    return "C";
   }
   return "C";
 }
